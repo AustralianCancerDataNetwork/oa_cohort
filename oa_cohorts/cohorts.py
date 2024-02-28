@@ -46,7 +46,7 @@ class Dash_Cohort_Rule(Base):
 
 class Dash_Cohort_Dx_Rule(Dash_Cohort_Rule):
     __tablename__ = 'dash_cohort_dx_rule'
-    dash_cohort_rule_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('dash_cohort_rule.dash_cohort_rule_id'))
+    dash_cohort_rule_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('dash_cohort_rule.dash_cohort_rule_id'), primary_key=True,)
     cohort_dx_type: so.Mapped[int] = so.mapped_column(sa.Enum(DxType)) # Enum for ANY | FIRST | METS
     __mapper_args__ = {
         "polymorphic_identity": RuleType.dx_rule.value,
@@ -54,7 +54,7 @@ class Dash_Cohort_Dx_Rule(Dash_Cohort_Rule):
 
 class Dash_Cohort_Tx_Rule(Dash_Cohort_Rule):
     __tablename__ = 'dash_cohort_tx_rule'
-    dash_cohort_rule_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('dash_cohort_rule.dash_cohort_rule_id'))
+    dash_cohort_rule_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('dash_cohort_rule.dash_cohort_rule_id'), primary_key=True,)
     cohort_tx_type: so.Mapped[int] = so.mapped_column(sa.Enum(DxType)) # Enum for ANY | FIRST LINE | CURRENT EPISODE
     __mapper_args__ = {
         "polymorphic_identity": RuleType.tx_rule.value,
