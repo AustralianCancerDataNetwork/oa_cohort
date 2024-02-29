@@ -8,8 +8,9 @@ import enum
 
 class DxType(enum.Enum):
     dx_any = 1
-    dx_first = 2
-    dx_mets = 3
+    dx_primary = 2
+    dx_first_primary = 3
+    dx_mets = 4
 
 class RuleCombination(enum.Enum):
     rule_or = 1
@@ -59,7 +60,7 @@ class Dash_Cohort_Rule(Base):
 class Dash_Cohort_Dx_Rule(Dash_Cohort_Rule):
     __tablename__ = 'dash_cohort_dx_rule'
     dash_cohort_rule_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('dash_cohort_rule.dash_cohort_rule_id'), primary_key=True,)
-    cohort_dx_type: so.Mapped[int] = so.mapped_column(sa.Enum(DxType)) # Enum for ANY | FIRST | METS
+    cohort_dx_type: so.Mapped[int] = so.mapped_column(sa.Enum(DxType)) # Enum for ANY | PRIMARY | FIRST_PRIMARY | METS
     # relationships
     diagnoses: so.Mapped[List['Dash_Cohort_Dx']] = so.relationship(back_populates="dx_rule_object", lazy="selectin")
 
@@ -83,4 +84,4 @@ class Dash_Cohort_Dx(Base):
     dx_concept_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('concept.concept_id'))
     # relationships
     diagnosis_object: so.Mapped['Concept'] = so.relationship(foreign_keys=[dx_concept_id])
-    dx_rule_object: so.Mapped['Dash_Cohort_Dx_Rule'] = so.relationship(foreign_keys=["dash_cohort_rule_id"])
+    dx_rule_object: so.Mapped['Dash_Cohort_Dx_Rule'] = so.relationship(foreign_keys=[dash_cohort_rule_id])
