@@ -37,12 +37,12 @@ class Dash_Cohort(Base):
     dash_cohort_id: so.Mapped[int] = so.mapped_column(primary_key=True, autoincrement=True)
     cohort_name: so.Mapped[str] = so.mapped_column(sa.String(250))
     # relationships
-    definitions: so.Mapped[List['Dash_Cohort_Definition']] = so.relationship(back_populates="dash_cohort_object", lazy="selectin")
+    definitions: so.Mapped[List['Dash_Cohort_Def']] = so.relationship(back_populates="dash_cohort_object", lazy="selectin")
 
     def __repr__(self):
         return f'Cohort: ID = {self.dash_cohort_id} > NAME = {self.cohort_name}'
 
-class Dash_Cohort_Definition(Base):
+class Dash_Cohort_Def(Base):
     __tablename__ = 'dash_cohort_def'
     dash_cohort_def_id: so.Mapped[int] = so.mapped_column(primary_key=True, autoincrement=True)
     cohort_def_name: so.Mapped[str] = so.mapped_column(sa.String(250))
@@ -65,7 +65,7 @@ class Dash_Cohort_Rule(Base):
     # fks
     dash_cohort_def_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('dash_cohort_def.dash_cohort_def_id'))
     # relationships
-    dash_def_object: so.Mapped['Dash_Cohort_Definition'] = so.relationship(foreign_keys=[dash_cohort_def_id])
+    dash_def_object: so.Mapped['Dash_Cohort_Def'] = so.relationship(foreign_keys=[dash_cohort_def_id])
 
     def __repr__(self):
         return f'Cohort Rule: ID = {self.dash_cohort_rule_id} > COMBINATION = {self.cohort_rule_combination} > TYPE = {self.rule_type}'
