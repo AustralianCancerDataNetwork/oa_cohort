@@ -23,6 +23,15 @@ class RuleType(enum.Enum):
     event_rule = 3
     demog_rule = 4
 
+class TxType(enum.Enum):
+    any = 1
+    first_line = 2
+    current_episode = 3
+    chemotherapy = 4
+    radiotherapy = 5
+    surgical = 4
+
+
 class Dash_Cohort(Base):
     __tablename__ = 'dash_cohort'
     dash_cohort_id: so.Mapped[int] = so.mapped_column(primary_key=True, autoincrement=True)
@@ -99,7 +108,7 @@ class Dash_Cohort_Dx_Rule(Dash_Cohort_Rule):
 class Dash_Cohort_Tx_Rule(Dash_Cohort_Rule):
     __tablename__ = 'dash_cohort_tx_rule'
     dash_cohort_tx_rule_id: so.Mapped[int] = so.mapped_column(primary_key=True, autoincrement=True)
-    cohort_tx_type: so.Mapped[int] = so.mapped_column(sa.Enum(DxType)) # Enum for ANY | FIRST LINE | CURRENT EPISODE
+    cohort_tx_type: so.Mapped[int] = so.mapped_column(sa.Enum(TxType)) # Enum for ANY | FIRST LINE | CURRENT EPISODE
 
     __mapper_args__ = {
         "polymorphic_identity": "tx_rule",
