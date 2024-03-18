@@ -31,7 +31,6 @@ class TxType(enum.Enum):
     radiotherapy = 5
     surgical = 4
 
-
 class Dash_Cohort(Base):
     __tablename__ = 'dash_cohort'
     dash_cohort_id: so.Mapped[int] = so.mapped_column(primary_key=True, autoincrement=True)
@@ -56,7 +55,6 @@ class Dash_Cohort_Def(Base):
     def __repr__(self):
         return f'Cohort Definition: ID = {self.dash_cohort_def_id} > NAME = {self.cohort_def_name}'
 
-
 class Dash_Cohort_Rule(Base):
     __tablename__ = 'dash_cohort_rule'
     dash_cohort_rule_id: so.Mapped[int] = so.mapped_column(primary_key=True, autoincrement=True)
@@ -70,25 +68,12 @@ class Dash_Cohort_Rule(Base):
     def __repr__(self):
         return f'Cohort Rule: ID = {self.dash_cohort_rule_id} > COMBINATION = {self.cohort_rule_combination} > TYPE = {self.rule_type}'
     
-    # dx_rules: so.Mapped[List['Dash_Cohort_Dx_Rule']] = so.relationship(
-    #     backref="dx_rule_obj", lazy="selectin", viewonly=True
-    # )
-
-    # tx_rules: so.Mapped[List['Dash_Cohort_Tx_Rule']] = so.relationship(
-    #     backref="tx_rule_obj", lazy="selectin", viewonly=True
-    # )
-    
     __mapper_args__ = {
             "polymorphic_on":sa.case(
                 (rule_type == RuleType.dx_rule, "dx_rule"),
                  else_="tx_rule"),
             "polymorphic_identity":"dash_cohort_rule"
         }
-
-    # __mapper_args__ = {
-    #     "polymorphic_identity": "cohort_rule",
-    #     "polymorphic_on": "rule_type",
-    # }
 
 class Dash_Cohort_Dx_Rule(Dash_Cohort_Rule):
     __tablename__ = 'dash_cohort_dx_rule'
