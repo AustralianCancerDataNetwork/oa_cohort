@@ -6,9 +6,8 @@ authors = ["georgie <georgina.kennedy@unsw.edu.au>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
-omop-alchemy = {git = "https://github.com/AustralianCancerDataNetwork/OMOP_Alchemy.git"}
-
+python = "^3.10"
+omop-alchemy = {path = "../OMOP_Alchemy", develop=true}
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.3"
