@@ -6,7 +6,7 @@ authors = ["georgie <georgina.kennedy@unsw.edu.au>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.11"
 omop-alchemy = {path = "../OMOP_Alchemy", develop=true}
 
 #[tool.poetry.group.prod.dependencies]
