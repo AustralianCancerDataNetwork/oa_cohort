@@ -52,7 +52,19 @@ class RuleTarget(enum.Enum):
                 15: Observation.observation_concept_id,
                 16: Procedure_Occurrence.procedure_concept_id}
 
-    def target(self):
+    def string_target_options(self):
+        return {1: Condition_Occurrence.condition_concept.concept_code, 
+                2: Condition_Occurrence.condition_concept.concept_code, 
+                3: Condition_Occurrence.condition_concept.concept_code, 
+                4: Condition_Occurrence.condition_concept.concept_code, 
+                5: Condition_Occurrence.condition_concept.concept_code
+                14: Observation.value_as_concept_id,
+                15: Observation.observation_concept_id,
+                16: Procedure_Occurrence.procedure_concept_id}
+
+    def target(self, str_match=False):
+        if str_match:
+            return self.string_target_options()[self.value]
         return self.target_options()[self.value]
 
 class RuleCombination(enum.Enum):
@@ -246,6 +258,10 @@ class Subquery(Base):
     subquery_combination: so.Mapped[int] = so.mapped_column(sa.Enum(RuleCombination))
     query_rules: so.Mapped[List['Query_Rule']] = so.relationship(secondary=query_rule_map, 
                                                                  back_populates="subqueries")
+
+    @property
+    def filter_field(self):
+
 
     __mapper_args__ = {
         "polymorphic_on":sa.case(
