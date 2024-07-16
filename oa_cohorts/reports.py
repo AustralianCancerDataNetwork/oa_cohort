@@ -245,8 +245,8 @@ class Dash_Cohort(Base):
     dash_cohort_name: so.Mapped[str] = so.mapped_column(sa.String(250))
     
     in_reports: so.Mapped[List['Report_Cohort_Map']] = so.relationship(back_populates='cohort')
-    definitions: so.Mapped[List['Measure']] = so.relationship(secondary=dash_cohort_measure_map, 
-                                                              back_populates="dash_cohort_objects")
+    definitions: so.Mapped[List['Dash_Cohort_Def']] = so.relationship(secondary=dash_cohort_def_map, 
+                                                                      back_populates="dash_cohort_objects")
     # def full_cohort_def(self):
     #     return self.dash_cohort_combination.combiner()(*[m.cohort_definition() for m in self.definitions])                                                                    
 
@@ -262,9 +262,9 @@ class Dash_Cohort_Def(Base):
     dash_cohort_def_combination: so.Mapped[int] = so.mapped_column(sa.Enum(RuleCombination)) # rule_and, rule_or, rule_except
     
     dash_cohort_objects: so.Mapped[List['Dash_Cohort']] = so.relationship(secondary=dash_cohort_def_map, 
-                                                                          back_populates="in_dash_cohort")
+                                                                          back_populates="definitions")
     dash_cohort_measures: so.Mapped[List['Measure']] = so.relationship(secondary=dash_cohort_measure_map, 
-                                                                       back_populates="definitions")
+                                                                       back_populates="in_dash_cohort")
 
     def cohort_definition(self):
         return self.dash_cohort_measure_combination.combiner()(*[m.measure_definition() for m in self.dash_cohort_measures])

@@ -21,20 +21,20 @@ import enum
 class Cohort_Refresh(Base):
     __tablename__ = 'cohort_refresh'
     id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
-    dash_cohort_def_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('dash_cohort_def.id'))
+    dash_cohort_def_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('dash_cohort_def.dash_cohort_def_id'))
     refresh_date: so.Mapped[date] = so.mapped_column(sa.DateTime)
 
 
 class Cohort_Person(Base):
     __tablename__ = 'cohort_person'
     person_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('person.person_id'), primary_key=True)
-    dash_cohort_def_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('dash_cohort_def.id'), primary_key=True)
+    dash_cohort_def_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('dash_cohort_def.dash_cohort_def_id'), primary_key=True)
 
 
 class Measure_Person(Base):
     __tablename__ = 'measure_person' 
     person_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('person.person_id'), primary_key=True)
-    measure_def_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('measure_def.id'), primary_key=True)
+    measure_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('measure.measure_id'), primary_key=True)
     measure_date: so.Mapped[Optional[date]] = so.mapped_column(sa.DateTime, nullable=True)
     measure_value: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, nullable=True)
 
@@ -43,7 +43,7 @@ class Measure_Person(Base):
 class Subquery_Person(Base):
     __tablename__ = 'subquery_person'
     person_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('person.person_id'), primary_key=True)
-    subquery_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('subquery.id'), primary_key=True)
+    subquery_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), primary_key=True)
     subquery_date: so.Mapped[Optional[date]] = so.mapped_column(sa.DateTime, nullable=True)
     subquery_value: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, nullable=True)
 
