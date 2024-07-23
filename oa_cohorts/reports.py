@@ -41,16 +41,16 @@ class RuleTarget(enum.Enum):
     proc_concept = 16
 
     def target_table(self):
-        return {1: Condition_Occurrence, 
-                2: Condition_Occurrence, 
-                3: Condition_Occurrence, 
-                4: Condition_Occurrence, 
-                5: Condition_Occurrence,
-                12: Person,
-                13: Person,
-                14: Observation,
-                15: Observation,
-                16: Procedure_Occurrence}[self.value]
+        return {1: Condition_Occurrence.person_id, 
+                2: Condition_Occurrence.person_id, 
+                3: Condition_Occurrence.person_id, 
+                4: Condition_Occurrence.person_id, 
+                5: Condition_Occurrence.person_id,
+                12: Person.person_id,
+                13: Person.person_id,
+                14: Observation.person_id,
+                15: Observation.person_id,
+                16: Procedure_Occurrence.person_id}[self.value]
 
     def target_options(self):
         return {1: Condition_Occurrence.condition_concept_id, 
@@ -85,7 +85,8 @@ class RuleCombination(enum.Enum):
     rule_except = 3
 
     def combiner_options(self):
-        return {1: sa.or_, 2: sa.and_, 3: sa.not_}
+        return {1: sa.union_all, 2: sa.intersect_all, 3: sa.except_all}
+        #return {1: sa.or_, 2: sa.and_, 3: sa.not_}
 
     def combiner(self):
         return self.combiner_options()[self.value]
@@ -113,6 +114,10 @@ class RuleTemporality(enum.Enum):
     dt_numerator = 6
     dt_denominator = 7
     dt_any = 8
+    
+    def target_date_field(self):
+        return {1: Condition_Occurrence.condition_start_date,
+                2: Person.death_datetime}[self.value]
 
 class ReportStatus(enum.Enum):
     st_current = 1
@@ -120,13 +125,12 @@ class ReportStatus(enum.Enum):
     st_historical = 3
 
 
-
-# report_indicator_map =  sa.Table(
-#     'report_indicator_map', 
-#     Base.metadata,
-#     sa.Column('report_id', sa.ForeignKey('report.id')),
-#     sa.Column('indicator', sa.ForeignKey('indicator.id'))
-# )
+report_indicator_map =  sa.Table(
+    'report_indicator_map', 
+    Base.metadata,
+    sa.Column('report_id', sa.ForeignKey('report.report_id')),
+    sa.Column('indicator_id', sa.ForeignKey('indicator.indicator_id'))
+)
 
 query_rule_map =  sa.Table(
     'query_rule_map', 
@@ -135,7 +139,6 @@ query_rule_map =  sa.Table(
     sa.Column('query_rule_id', sa.ForeignKey('query_rule.query_rule_id'))
 )
 
-
 """Association table for n-m mapping between dash_cohort and dash_cohort_def"""
 dash_cohort_def_map = sa.Table(
     'dash_cohort_def_map', 
@@ -143,7 +146,6 @@ dash_cohort_def_map = sa.Table(
     sa.Column('dash_cohort_def_id', sa.ForeignKey('dash_cohort_def.dash_cohort_def_id')),
     sa.Column('dash_cohort_id', sa.ForeignKey('dash_cohort.dash_cohort_id'))
 )
-
 
 """Association table for n-m mapping between dash_cohort_def and included measures"""
 dash_cohort_measure_map = sa.Table(
@@ -164,6 +166,8 @@ class Report(Base):
     """
     __tablename__ = 'report'
     report_id: so.Mapped[int] = so.mapped_column(primary_key=True)
+    id = so.synonym('report_id')
+
     report_name: so.Mapped[str] = so.mapped_column(sa.String(250))
     report_short_name: so.Mapped[str] = so.mapped_column(sa.String(50))
     report_description: so.Mapped[str] = so.mapped_column(sa.String(1000))
@@ -173,7 +177,8 @@ class Report(Base):
     report_owner: so.Mapped[Optional[str]] = so.mapped_column(sa.String(250), nullable=True)
 
     cohorts: so.Mapped[List['Report_Cohort_Map']] = so.relationship(back_populates='report')
-#    indicators: so.Mapped[List['Indicator']] = so.relationship(secondary=report_indicator_map, back_populates='reports')
+    indicators: so.Mapped[List['Indicator']] = so.relationship(secondary=report_indicator_map, 
+                                                               back_populates='in_reports')
     report_versions: so.Mapped[List["Report_Version"]] = so.relationship("Report_Version")
 
     # def __init__(self, 
@@ -181,10 +186,14 @@ class Report(Base):
     #              **kwargs):
     #     super().__init__(*args, **kwargs)
 
-    @property
+    # use hybrid properties judiciously as they force eager loads when working with related objects like this, 
+    # but they are required for any calculated fields that you want to use
+    # directly in the fastapi serialisation steps - if these fields do not require joins then you should use
+    # pydantic calculated fields directly. 
+    @sa.ext.hybrid.hybrid_property
     def version_string(self):
-        if self.report_version:
-            return f'{self.report_version.report_version_major}.{self.report_version.report_version_minor} ({self.report_version.report_version_label})'
+        if self.report_versions:
+            return ';'.join([f'{rv.report_version_major}.{rv.report_version_minor} ({rv.report_version_label})' for rv in self.report_versions])
 
 class Report_Version(Base):
     """Report versioning table. 
@@ -193,14 +202,43 @@ class Report_Version(Base):
     """
     __tablename__ = 'report_version'
     report_version_id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
-    report_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('report.report_id'), primary_key=True)
-    report_version_major: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
-    report_version_minor: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
+    id = so.synonym('report_version_id')
+    
+    report_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('report.report_id'))
+    report_version_major: so.Mapped[int] = so.mapped_column(sa.Integer)
+    report_version_minor: so.Mapped[int] = so.mapped_column(sa.Integer)
     report_version_label: so.Mapped[str] = so.mapped_column(sa.String(50))
     report_version_date: so.Mapped[date] = so.mapped_column(sa.DateTime)
     report_status: so.Mapped[int] = so.mapped_column(sa.Enum(ReportStatus)) # st_current, st_draft, st_historical
 
     report: so.Mapped["Report"] = so.relationship(foreign_keys=[report_id], back_populates='report_versions')
+
+
+class Indicator(Base):
+    __tablename__ = 'indicator'
+    indicator_id: so.Mapped[int] = so.mapped_column(primary_key=True)
+    id = so.synonym('indicator_id')
+
+    indicator_description: so.Mapped[str] = so.mapped_column(sa.String(250))
+    indicator_reference: so.Mapped[Optional[str]] = so.mapped_column(sa.String(50), nullable=True)
+    numerator_measure_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('measure.measure_id'))
+    numerator_label: so.Mapped[str] = so.mapped_column(sa.String[50])
+    denominator_measure_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('measure.measure_id'))
+    denominator_label: so.Mapped[str] = so.mapped_column(sa.String[50])
+    temporal_early: so.Mapped[Optional[int]] = so.mapped_column(sa.Enum(RuleTemporality), nullable=True)
+    temporal_late: so.Mapped[Optional[int]] = so.mapped_column(sa.Enum(RuleTemporality), nullable=True)
+    temporal_min: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer(), nullable=True)
+    temporal_min_units: so.Mapped[Optional[int]] = so.mapped_column(sa.String(20), nullable=True)
+    temporal_max: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer(), nullable=True)
+    temporal_max_units: so.Mapped[Optional[int]] = so.mapped_column(sa.String(20), nullable=True)
+    benchmark: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer(), nullable=True)
+    benchmark_unit: so.Mapped[Optional[int]] = so.mapped_column(sa.String(20), nullable=True)
+
+    numerator_measure: so.Mapped['Measure'] = so.relationship(foreign_keys=[numerator_measure_id])
+    denominator_measure: so.Mapped['Measure'] = so.relationship(foreign_keys=[denominator_measure_id])
+    in_reports: so.Mapped[List['Report']] = so.relationship(secondary=report_indicator_map,
+                                                            back_populates="indicators")
+
 
 class Report_Cohort_Map(Base):
     """Class that is used to map between cohorts and reports. 
@@ -216,10 +254,12 @@ class Report_Cohort_Map(Base):
     __tablename__ = 'report_cohort_map' 
     
     report_cohort_map_id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
+    id = so.synonym('report_cohort_map_id')
+
     report_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('report.report_id'), primary_key=True)
     dash_cohort_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('dash_cohort.dash_cohort_id'), primary_key=True)
-
     primary_cohort: so.Mapped[bool] = so.mapped_column(sa.Boolean)
+
     cohort: so.Mapped['Dash_Cohort'] = so.relationship(back_populates='in_reports')
     report: so.Mapped['Report'] = so.relationship(back_populates='cohorts')
 
@@ -234,14 +274,16 @@ class Dash_Cohort(Base):
     It is theoretically possible to define primary head and neck cancer as a single dash cohort definition, but 
     then it is less user friendly for filtering, and it should also be possible to re-use cohort definitions in 
     different cohorts as well, e.g. 
-    Cohort=Colorectal -> Cohort Def = Colon, Rectum, etc.
-    Cohort=GI Cancer -> Cohort Def = Stomach, Colon, etc...
+    * Cohort=Colorectal -> Cohort Def = Colon, Rectum, etc.
+    * Cohort=GI Cancer -> Cohort Def = Stomach, Colon, etc...
 
     For this reason, the Dash_Cohort class does not add any additional functionality beyond what is already 
     configured in the Dash_Cohort_Def class
     """
     __tablename__ = 'dash_cohort'
     dash_cohort_id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
+    id = so.synonym('dash_cohort_id')
+
     dash_cohort_name: so.Mapped[str] = so.mapped_column(sa.String(250))
     
     in_reports: so.Mapped[List['Report_Cohort_Map']] = so.relationship(back_populates='cohort')
@@ -257,14 +299,24 @@ class Dash_Cohort_Def(Base):
     """
     __tablename__ = 'dash_cohort_def'
     dash_cohort_def_id: so.Mapped[int] = so.mapped_column(primary_key=True)
+    id = so.synonym('dash_cohort_def_id')
+
     dash_cohort_def_name: so.Mapped[str] = so.mapped_column(sa.String(250))
     dash_cohort_def_short_name: so.Mapped[str] = so.mapped_column(sa.String(50))
-    dash_cohort_def_combination: so.Mapped[int] = so.mapped_column(sa.Enum(RuleCombination)) # rule_and, rule_or, rule_except
+    dash_cohort_measure_combination: so.Mapped[int] = so.mapped_column(sa.Enum(RuleCombination)) # rule_and, rule_or, rule_except
     
     dash_cohort_objects: so.Mapped[List['Dash_Cohort']] = so.relationship(secondary=dash_cohort_def_map, 
                                                                           back_populates="definitions")
     dash_cohort_measures: so.Mapped[List['Measure']] = so.relationship(secondary=dash_cohort_measure_map, 
                                                                        back_populates="in_dash_cohort")
+
+    def get_cohort(self, db):
+        return self.dash_cohort_measure_combination.combiner()(*[m.get_measure(db) for m in self.dash_cohort_measures])
+    
+    def execute_cohort(self, db):
+        query = self.get_cohort(db)
+        results = db.execute(sa.Select(query.c).distinct()).all()
+        return results
 
     def cohort_definition(self):
         return self.dash_cohort_measure_combination.combiner()(*[m.measure_definition() for m in self.dash_cohort_measures])
@@ -283,26 +335,41 @@ class Measure(Base):
     """
     __tablename__ = 'measure'
     measure_id: so.Mapped[int] = so.mapped_column(primary_key=True)
+    id = so.synonym('measure_id')
+
     measure_name: so.Mapped[str] = so.mapped_column(sa.String(250))
     measure_combination: so.Mapped[int] = so.mapped_column(sa.Enum(RuleCombination)) # rule_and, rule_or, rule_except
-    parent_measure_id: so.Mapped[Optional[int]] = so.mapped_column(sa.ForeignKey('measure.measure_id'), nullable=True) 
     subquery_id: so.Mapped[Optional[int]] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), nullable=True)
-
+    
+    subquery: so.Mapped["Subquery"] = so.relationship("Subquery", foreign_keys=[subquery_id], back_populates='measures')
     in_dash_cohort: so.Mapped[List['Dash_Cohort_Def']] = so.relationship(secondary=dash_cohort_measure_map, 
                                                                          back_populates="dash_cohort_measures")
 
-    parent_measure: so.Mapped["Measure"] = so.relationship("Measure", 
-                                                           remote_side=measure_id, 
-                                                           foreign_keys=parent_measure_id,
-                                                           back_populates="child_measures")
+    child_measures: so.Mapped[List["Measure_Relationship"]] = so.relationship("Measure_Relationship", foreign_keys="Measure_Relationship.parent_measure_id", viewonly=True)
+    parent_measures: so.Mapped[List["Measure_Relationship"]] = so.relationship("Measure_Relationship", foreign_keys="Measure_Relationship.child_measure_id", viewonly=True)
 
-    child_measures: so.Mapped[List["Measure"]] = so.relationship("Measure", back_populates="parent_measure")
-    subquery: so.Mapped["Subquery"] = so.relationship("Subquery", foreign_keys=[subquery_id], back_populates='measures')
+    def get_measure(self, db):
+        if self.subquery:
+            return self.subquery.get_subquery(self.measure_combination)
+        children = [c.child for c in self.child_measures]
+        return self.measure_combination.combiner()(*[m.get_measure(db) for m in children])
 
-    # def measure_definition(self):
-    #     return self.measure_combination.combiner()(*[m.get_filter() for m in self.measure_defs])
+    def execute_measure(self, db):
+        query = self.get_measure(db)
+        results = db.execute(query).all()
+        return results
 
+class Measure_Relationship(Base):
+    """Association object for n-m mapping between parent and child measures.
+    
+    This can't be achieved via association table alone, despite lack of additional data, due to the self-referential nature of this relationship.
+    """
+    __tablename__ = 'measure_relationship'
+    parent_measure_id: so.Mapped[Optional[int]] = so.mapped_column(sa.ForeignKey('measure.measure_id'), primary_key=True) 
+    child_measure_id: so.Mapped[Optional[int]] = so.mapped_column(sa.ForeignKey('measure.measure_id'), primary_key=True) 
 
+    parent: so.Mapped["Measure"] = so.relationship("Measure", foreign_keys=[parent_measure_id], back_populates='child_measures')
+    child: so.Mapped["Measure"] = so.relationship("Measure", foreign_keys=[child_measure_id], back_populates='parent_measures')
 
 class Subquery(Base):
     """ Subqueries correspond to specific OHDSI fields within the CDM in which to look for presence or absence of  target concepts. 
@@ -312,6 +379,8 @@ class Subquery(Base):
     """
     __tablename__ = 'subquery'
     subquery_id: so.Mapped[int] = so.mapped_column(primary_key=True)
+    id = so.synonym('subquery_id')
+
     subquery_name: so.Mapped[str] = so.mapped_column(sa.String(250))
     subquery_short_name: so.Mapped[str] = so.mapped_column(sa.String(50))
     subquery_type: so.Mapped[int] = so.mapped_column(sa.Enum(RuleType)) # dx_rule, tx_rule, obs_rule, proc_rule
@@ -324,12 +393,18 @@ class Subquery(Base):
     query_rules: so.Mapped[List['Query_Rule']] = so.relationship(secondary=query_rule_map, back_populates="subqueries")
 
     @property
+    def subquery_matcher(self):
+        if len(self.query_rules) == 0:
+            raise RuntimeError(f'Unable to generate filter for subquery {self.subquery_id} - no valid query rules assigned')
+        return self.query_rules[0].query_matcher
+
+    @property
     def filter_field(self):
         return self.subquery_target.target(self.subquery_matcher == RuleMatcher.substring)
 
     @property
     def filter_table(self):
-        return self.subquery_target.target_table
+        return (self.subquery_target.target_table(), self.subquery_temporality.target_date_field().label('measure_date'))
 
     __mapper_args__ = {
         "polymorphic_on":sa.case(
@@ -341,20 +416,12 @@ class Subquery(Base):
         "polymorphic_identity":"subquery_type"
     }
 
-    def get_subquery(self, db):
+    def get_subquery(self, subquery_combination):
         if len(self.query_rules) == 0:
             return None
-        qr = [db.query(self.filter_table()).filter(sq.get_filter_details(self.filter_field)) for sq in self.query_rules]
-        query = qr[0]
-        for q in qr[1:]:
-            if self.subquery_combination in [RuleCombination.rule_or, RuleCombination.rule_simple]:
-                query = query.union(q)
-            elif self.subquery_combination in [RuleCombination.rule_and]:
-                query = query.intersection(q)
+        qr = [sa.select(*self.filter_table).filter(sq.get_filter_details(self.filter_field)) for sq in self.query_rules]
+        query = subquery_combination.combiner()(*qr)
         return query
-
-    def execute_subquery(self, db):
-        return self.get_subquery(db).all()
 
     def get_filter(self, str_match=False):
         # given the properties of subquery type (dx, tx, person, observation or procedure)
@@ -439,6 +506,8 @@ class Query_Rule(Base):
     """
     __tablename__ = 'query_rule'
     query_rule_id: so.Mapped[int] = so.mapped_column(primary_key=True)
+    id = so.synonym('query_rule_id')
+
     query_matcher: so.Mapped[int] = so.mapped_column(sa.Enum(RuleMatcher)) # substring, exact, hierarchy, presence, absence
     query_concept_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('concept.concept_id'), default=0)
     query_notes: so.Mapped[Optional[str]] = so.mapped_column(sa.String(250), nullable=True)        
@@ -531,25 +600,3 @@ class Presence_Query_Rule(Query_Rule):
 
     def get_filter_details(self, field):
         return field.is_not(None)
-
-# class Indicator(Base):
-#     __tablename__ = 'indicator'
-#     id: so.Mapped[int] = so.mapped_column(primary_key=True)
-#     indicator_description: so.Mapped[str] = so.mapped_column(sa.String(250))
-#     indicator_reference: so.Mapped[Optional[str]] = so.mapped_column(sa.String(50), nullable=True)
-#     numerator_measure_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('measure.id'))
-#     numerator_label: so.Mapped[str] = so.mapped_column(sa.String[50])
-#     denominator_measure_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('measure.id'))
-#     denominator_label: so.Mapped[str] = so.mapped_column(sa.String[50])
-#     temporal_early: so.Mapped[Optional[int]] = so.mapped_column(sa.Enum(RuleTemporality), nullable=True)
-#     temporal_late: so.Mapped[Optional[int]] = so.mapped_column(sa.Enum(RuleTemporality), nullable=True)
-#     temporal_min: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer(), nullable=True)
-#     temporal_min_units: so.Mapped[Optional[int]] = so.mapped_column(sa.String(20), nullable=True)
-#     temporal_max: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer(), nullable=True)
-#     temporal_max_units: so.Mapped[Optional[int]] = so.mapped_column(sa.String(20), nullable=True)
-#     benchmark: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer(), nullable=True)
-#     benchmark_unit: so.Mapped[Optional[int]] = so.mapped_column(sa.String(20), nullable=True)
-
-#     numerator_measure: so.Mapped['Measure'] = so.relationship(foreign_keys=[numerator_measure_id])
-#     denominator_measure: so.Mapped['Measure'] = so.relationship(foreign_keys=[denominator_measure_id])
-#     reports: so.Mapped[List['Report']] = so.relationship(secondary=report_indicator_map,back_populates="indicators")
