@@ -329,9 +329,6 @@ class Measure(Base):
     An example measure may have the sub-queries _Lung Cancer_ **and** _Stage IV_, to select all patients with Stage IV lung cancer, 
     or it could be broken down further with sub-query _Lung Cancer_ **and** a child measure representing the combination (_Stage I_
     **or** _Stage 2_).
-
-    Note that there may end up being some duplicate measures, as each measure must have only a single parent - enforce a 1-n mapping
-    for simplicity.
     """
     __tablename__ = 'measure'
     measure_id: so.Mapped[int] = so.mapped_column(primary_key=True)
@@ -345,8 +342,12 @@ class Measure(Base):
     in_dash_cohort: so.Mapped[List['Dash_Cohort_Def']] = so.relationship(secondary=dash_cohort_measure_map, 
                                                                          back_populates="dash_cohort_measures")
 
-    child_measures: so.Mapped[List["Measure_Relationship"]] = so.relationship("Measure_Relationship", foreign_keys="Measure_Relationship.parent_measure_id", viewonly=True)
-    parent_measures: so.Mapped[List["Measure_Relationship"]] = so.relationship("Measure_Relationship", foreign_keys="Measure_Relationship.child_measure_id", viewonly=True)
+    child_measures: so.Mapped[List["Measure_Relationship"]] = so.relationship("Measure_Relationship", 
+                                                                              foreign_keys="Measure_Relationship.parent_measure_id", 
+                                                                              viewonly=True)
+    parent_measures: so.Mapped[List["Measure_Relationship"]] = so.relationship("Measure_Relationship", 
+                                                                               foreign_keys="Measure_Relationship.child_measure_id", 
+                                                                               viewonly=True)
 
     def get_measure(self, db):
         if self.subquery:
@@ -354,8 +355,10 @@ class Measure(Base):
         children = [c.child for c in self.child_measures]
         return self.measure_combination.combiner()(*[m.get_measure(db) for m in children])
 
-    def execute_measure(self, db):
+    def execute_measure(self, db, people=[]):
         query = self.get_measure(db)
+        if len(people) > 0:
+            query = sa.select(query.subquery()).filter(sa.column('person_id').in_(people))
         results = db.execute(query).all()
         return results
 
