@@ -4,9 +4,14 @@ import sqlalchemy as sa
 import sqlalchemy.orm as so
 from omop_alchemy.db import Base
 from omop_alchemy.model.vocabulary import Concept, Concept_Ancestor
-from omop_alchemy.model.clinical import Condition_Occurrence, Person, Observation, Procedure_Occurrence
+from omop_alchemy.model.clinical import Condition_Occurrence, Person, Observation, Procedure_Occurrence, Measurement
+from omop_alchemy.model.onco_ext import Condition_Episode
 from sqlalchemy import Enum
 import enum, uuid
+from itertools import chain
+
+from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
+
 
 # valid subquery combinations:
 # subquery type    | subquery target                | implementation target
@@ -39,30 +44,33 @@ class RuleTarget(enum.Enum):
     obs_value = 14
     obs_concept = 15
     proc_concept = 16
+    meas_concept = 17
 
     def target_table(self):
-        return {1: Condition_Occurrence.person_id, 
-                2: Condition_Occurrence.person_id, 
-                3: Condition_Occurrence.person_id, 
-                4: Condition_Occurrence.person_id, 
-                5: Condition_Occurrence.person_id,
-                12: Person.person_id,
-                13: Person.person_id,
-                14: Observation.person_id,
-                15: Observation.person_id,
-                16: Procedure_Occurrence.person_id}[self.value]
+        return {1: (Condition_Episode.person_id, Condition_Episode.episode_id.label('measure_resolver')), 
+                2: (Condition_Episode.person_id, Condition_Episode.episode_id.label('measure_resolver')), 
+                3: (Condition_Episode.person_id, Condition_Episode.episode_id.label('measure_resolver')), 
+                4: (Condition_Episode.person_id, Condition_Episode.episode_id.label('measure_resolver')), 
+                5: (Condition_Episode.person_id, Condition_Episode.episode_id.label('measure_resolver')),
+                12: (Person.person_id, Person.person_id.label('measure_resolver')),
+                13: (Person.person_id, Person.person_id.label('measure_resolver')),
+                14: (Observation.person_id, Observation.person_id.label('measure_resolver')),
+                15: (Observation.person_id, Observation.person_id.label('measure_resolver')),
+                16: (Procedure_Occurrence.person_id, Procedure_Occurrence.person_id.label('measure_resolver')),
+                17: (Measurement.person_id, Measurement.person_id.label('measure_resolver'))}[self.value]
 
     def target_options(self):
-        return {1: Condition_Occurrence.condition_concept_id, 
-                2: Condition_Occurrence.condition_concept_id, 
-                3: Condition_Occurrence.condition_concept_id, 
-                4: Condition_Occurrence.condition_concept_id, 
-                5: Condition_Occurrence.condition_concept_id,
+        return {1: Condition_Episode.condition_concept_id, 
+                2: Condition_Episode.condition_concept_id, 
+                3: Condition_Episode.condition_concept_id, 
+                4: Condition_Episode.condition_concept_id, 
+                5: Condition_Episode.modifier_concepts,
                 12: Person.gender_concept_id,
                 13: Person.death_datetime,
                 14: Observation.value_as_concept_id,
                 15: Observation.observation_concept_id,
-                16: Procedure_Occurrence.procedure_concept_id}
+                16: Procedure_Occurrence.procedure_concept_id,
+                17: Measurement.measurement_concept_id}
 
     def string_target_options(self):
         return {1: Condition_Occurrence.condition_code, 
@@ -73,6 +81,7 @@ class RuleTarget(enum.Enum):
                 14: Observation.value_as_concept_id,
                 15: Observation.observation_concept_id,
                 16: Procedure_Occurrence.procedure_concept_id}
+               # 17: Measurement.measurement_concept_code}
 
     def target(self, str_match=False):
         if str_match:
@@ -86,7 +95,6 @@ class RuleCombination(enum.Enum):
 
     def combiner_options(self):
         return {1: sa.union_all, 2: sa.intersect_all, 3: sa.except_all}
-        #return {1: sa.or_, 2: sa.and_, 3: sa.not_}
 
     def combiner(self):
         return self.combiner_options()[self.value]
@@ -97,7 +105,7 @@ class RuleType(enum.Enum):
     obs_rule = 3
     person_rule = 4
     proc_rule = 5
-
+    meas_rule = 6
 class RuleMatcher(enum.Enum):
     substring = 1
     exact = 2
@@ -114,10 +122,14 @@ class RuleTemporality(enum.Enum):
     dt_numerator = 6
     dt_denominator = 7
     dt_any = 8
+    dt_meas = 9
     
     def target_date_field(self):
         return {1: Condition_Occurrence.condition_start_date,
-                2: Person.death_datetime}[self.value]
+                2: Person.death_datetime,
+                4: Observation.observation_date,
+                5: Procedure_Occurrence.procedure_date,
+                9: Measurement.measurement_date}[self.value]
 
 class ReportStatus(enum.Enum):
     st_current = 1
@@ -147,13 +159,6 @@ dash_cohort_def_map = sa.Table(
     sa.Column('dash_cohort_id', sa.ForeignKey('dash_cohort.dash_cohort_id'))
 )
 
-"""Association table for n-m mapping between dash_cohort_def and included measures"""
-dash_cohort_measure_map = sa.Table(
-    'dash_cohort_measure_map', 
-    Base.metadata,
-    sa.Column('dash_cohort_def_id', sa.ForeignKey('dash_cohort_def.dash_cohort_def_id')),
-    sa.Column('measure_id', sa.ForeignKey('measure.measure_id'))
-)
 
 class Report(Base):
     """Primary report class that is used to hold the full report definition. 
@@ -181,10 +186,28 @@ class Report(Base):
                                                                back_populates='in_reports')
     report_versions: so.Mapped[List["Report_Version"]] = so.relationship("Report_Version")
 
-    # def __init__(self, 
-    #              *args, 
-    #              **kwargs):
-    #     super().__init__(*args, **kwargs)
+    denominator_measures: AssociationProxy[List["Measure"]] = association_proxy("indicators", "denominator_measure")
+    numerator_measures: AssociationProxy[List["Measure"]] = association_proxy("indicators", "numerator_measure")
+
+    @property
+    def report_cohorts(self): 
+        return [c.cohort for c in self.cohorts]
+
+    @property
+    def indicator_measures(self):
+        return list(set(self.numerator_measures + self.denominator_measures))
+
+    @property
+    def cohort_measures(self):
+        return list(set(chain.from_iterable([c.measures for c in self.report_cohorts])))
+
+    @property
+    def report_measures(self):
+        return list(set(self.numerator_measures + self.denominator_measures + self.cohort_measures))
+
+    @property
+    def members(self):
+        return list(set(chain.from_iterable([c.members for c in self.report_cohorts])))
 
     # use hybrid properties judiciously as they force eager loads when working with related objects like this, 
     # but they are required for any calculated fields that you want to use
@@ -194,6 +217,8 @@ class Report(Base):
     def version_string(self):
         if self.report_versions:
             return ';'.join([f'{rv.report_version_major}.{rv.report_version_minor} ({rv.report_version_label})' for rv in self.report_versions])
+
+
 
 class Report_Version(Base):
     """Report versioning table. 
@@ -263,6 +288,27 @@ class Report_Cohort_Map(Base):
     cohort: so.Mapped['Dash_Cohort'] = so.relationship(back_populates='in_reports')
     report: so.Mapped['Report'] = so.relationship(back_populates='cohorts')
 
+    measures: AssociationProxy[List["Measure"]] = association_proxy("cohort", "measures")
+    definition_count: AssociationProxy[int] = association_proxy("cohort", "definition_count")
+
+
+    # @property
+    # def measures(self):
+    #     if self.cohort:
+    #         return [d.dash_cohort_measure for d in self.cohort.definitions]
+
+    # @property
+    # def definition_count(self):
+    #     if self.cohort:
+    #         return self.cohort.definition_count
+    #     return 0
+
+    @property
+    def measure_count(self):
+        if self.cohort:
+            return sum([d.measure_count for d in self.cohort.definitions])
+        return 0
+
 class Dash_Cohort(Base):
     """Top-level class for dash cohorts. 
     
@@ -289,13 +335,31 @@ class Dash_Cohort(Base):
     in_reports: so.Mapped[List['Report_Cohort_Map']] = so.relationship(back_populates='cohort')
     definitions: so.Mapped[List['Dash_Cohort_Def']] = so.relationship(secondary=dash_cohort_def_map, 
                                                                       back_populates="dash_cohort_objects")
-    # def full_cohort_def(self):
-    #     return self.dash_cohort_combination.combiner()(*[m.cohort_definition() for m in self.definitions])                                                                    
+
+    measures: AssociationProxy[List["Measure"]] = association_proxy("definitions", "dash_cohort_measure")
+                                                                    
+
+    @property
+    def cohort_def_labels(self):
+        return [(self.dash_cohort_name, d.dash_cohort_def_name, d.measure_id) for d in self.definitions]
+
+    @property
+    def members(self):
+        return list(set(chain.from_iterable([d.members for d in self.definitions])))
+
+    @property
+    def definition_count(self):
+        return len(self.definitions)
+
+    @property
+    def measure_count(self):
+        return len(self.measures)
+#        return sum([d.measure_count for d in self.cohort.definitions])
 
 class Dash_Cohort_Def(Base):
     """Conceptually-useful filtering units for end users.
 
-    Combines measures into cohorts available for report configuration.
+    Maps single measure into cohorts available for report configuration.
     """
     __tablename__ = 'dash_cohort_def'
     dash_cohort_def_id: so.Mapped[int] = so.mapped_column(primary_key=True)
@@ -303,23 +367,40 @@ class Dash_Cohort_Def(Base):
 
     dash_cohort_def_name: so.Mapped[str] = so.mapped_column(sa.String(250))
     dash_cohort_def_short_name: so.Mapped[str] = so.mapped_column(sa.String(50))
-    dash_cohort_measure_combination: so.Mapped[int] = so.mapped_column(sa.Enum(RuleCombination)) # rule_and, rule_or, rule_except
+    measure_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('measure.measure_id'))
     
     dash_cohort_objects: so.Mapped[List['Dash_Cohort']] = so.relationship(secondary=dash_cohort_def_map, 
                                                                           back_populates="definitions")
-    dash_cohort_measures: so.Mapped[List['Measure']] = so.relationship(secondary=dash_cohort_measure_map, 
-                                                                       back_populates="in_dash_cohort")
+    dash_cohort_measure: so.Mapped['Measure'] = so.relationship("Measure", foreign_keys=[measure_id], back_populates='in_dash_cohort')
 
-    def get_cohort(self, db):
-        return self.dash_cohort_measure_combination.combiner()(*[m.get_measure(db) for m in self.dash_cohort_measures])
-    
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+        self.init_on_load()
+
+    @property
+    def members(self):
+        return self._members
+
+    @so.reconstructor
+    def init_on_load(self):
+        self._members = []
+
     def execute_cohort(self, db):
-        query = self.get_cohort(db)
-        results = db.execute(sa.Select(query.c).distinct()).all()
-        return results
+        query = self.get_cohort()
+        self._members = db.execute(sa.Select(query.c).distinct()).all()
+
+    def get_cohort(self):
+        return self.dash_cohort_measure.get_measure()
 
     def cohort_definition(self):
-        return self.dash_cohort_measure_combination.combiner()(*[m.measure_definition() for m in self.dash_cohort_measures])
+        return self.dash_cohort_measure.measure_definition()
+
+    @property
+    def measure_count(self):
+        if self.dash_cohort_measure:
+            return self.dash_cohort_measure.measure_count
+        return 0
+        
 
 class Measure(Base):
     """Measure class can combine child measures using boolean logic to an arbitrary depth in order to build complex definitions.
@@ -339,8 +420,7 @@ class Measure(Base):
     subquery_id: so.Mapped[Optional[int]] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), nullable=True)
     
     subquery: so.Mapped["Subquery"] = so.relationship("Subquery", foreign_keys=[subquery_id], back_populates='measures')
-    in_dash_cohort: so.Mapped[List['Dash_Cohort_Def']] = so.relationship(secondary=dash_cohort_measure_map, 
-                                                                         back_populates="dash_cohort_measures")
+    in_dash_cohort: so.Mapped[List['Dash_Cohort_Def']] = so.relationship("Dash_Cohort_Def", back_populates="dash_cohort_measure")
 
     child_measures: so.Mapped[List["Measure_Relationship"]] = so.relationship("Measure_Relationship", 
                                                                               foreign_keys="Measure_Relationship.parent_measure_id", 
@@ -348,19 +428,39 @@ class Measure(Base):
     parent_measures: so.Mapped[List["Measure_Relationship"]] = so.relationship("Measure_Relationship", 
                                                                                foreign_keys="Measure_Relationship.child_measure_id", 
                                                                                viewonly=True)
-
-    def get_measure(self, db):
+    def get_measure(self):
         if self.subquery:
             return self.subquery.get_subquery(self.measure_combination)
-        children = [c.child for c in self.child_measures]
-        return self.measure_combination.combiner()(*[m.get_measure(db) for m in children])
+        return self.measure_combination.combiner()(*[m.get_measure() for m in self.children])
 
     def execute_measure(self, db, people=[]):
-        query = self.get_measure(db)
+        query = self.get_measure()
         if len(people) > 0:
             query = sa.select(query.subquery()).filter(sa.column('person_id').in_(people))
         results = db.execute(query).all()
         return results
+    
+    @property
+    def children(self):
+        return [c.child for c in self.child_measures]
+     
+    @property
+    def depth(self):
+        return 1 + max([c.depth for c in self.children] + [0])
+
+    @property
+    def measure_count(self):
+        return max(sum([c.measure_count for c in self.children]), 1)
+
+    @property
+    def child_defs(self, db):
+        return [c.full_measure_expression(db) for c in self.children]
+
+    @property
+    def measure_defs(self, db):
+        if len(self.children) > 0:
+            return self.child_defs(db)
+        return self.measure_name
 
 class Measure_Relationship(Base):
     """Association object for n-m mapping between parent and child measures.
@@ -386,7 +486,7 @@ class Subquery(Base):
 
     subquery_name: so.Mapped[str] = so.mapped_column(sa.String(250))
     subquery_short_name: so.Mapped[str] = so.mapped_column(sa.String(50))
-    subquery_type: so.Mapped[int] = so.mapped_column(sa.Enum(RuleType)) # dx_rule, tx_rule, obs_rule, proc_rule
+    subquery_type: so.Mapped[int] = so.mapped_column(sa.Enum(RuleType)) # dx_rule, tx_rule, obs_rule, proc_rule, meas_rule
     subquery_temporality: so.Mapped[int] = so.mapped_column(sa.Enum(RuleTemporality),       # dt_current_start, dt_death, dt_treatment_start, dt_any
                                                             default=RuleTemporality.dt_any) # dt_obs, dt_proc_start, dt_numerator, dt_denominator                                                                                                                        
     subquery_target: so.Mapped[int] = so.mapped_column(sa.Enum(RuleTarget)) # dx_primary, dx_any, dx_stage, tx_current_ep, tx_any, tx_chemo, tx_radio, tx_surgery,
@@ -407,7 +507,7 @@ class Subquery(Base):
 
     @property
     def filter_table(self):
-        return (self.subquery_target.target_table(), self.subquery_temporality.target_date_field().label('measure_date'))
+        return (*self.subquery_target.target_table(), self.subquery_temporality.target_date_field().label('measure_date'))
 
     __mapper_args__ = {
         "polymorphic_on":sa.case(
@@ -415,6 +515,7 @@ class Subquery(Base):
             (subquery_type == RuleType.tx_rule, "treatment"),
             (subquery_type == RuleType.obs_rule, "observation"),
             (subquery_type == RuleType.proc_rule, "procedure"),
+            (subquery_type == RuleType.meas_rule, "measurement"),
             else_="person"),
         "polymorphic_identity":"subquery_type"
     }
@@ -434,13 +535,16 @@ class Subquery(Base):
 
 class Dx_Subquery(Subquery):
     # filters cohort based on presence or absence of stated criteria in diagnostic episodes
+
+    # todo: why is this concrete inheritence? tbc?
     __tablename__ = 'dx_subquery'
     subquery_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), primary_key=True)
 
     def get_filter(self):
         # todo: check allowed combinations of target and type
         # todo: move field from condition_occurrence concept to primary dx ep concept
-        return self.subquery_combination.combiner()(*[sq.get_filter_details(self.filter_field) for sq in self.query_rules])
+        #return self.subquery_combination.combiner()(*[sq.get_filter_details(self.filter_field) for sq in self.query_rules])
+        return [sq.get_filter_details(self.filter_field) for sq in self.query_rules]
 
     __mapper_args__ = {
         "polymorphic_identity": "diagnostic",
@@ -485,6 +589,19 @@ class Proc_Subquery(Subquery):
 
     __mapper_args__ = {
         "polymorphic_identity": "procedure",
+        'inherit_condition': (subquery_id == Subquery.subquery_id)
+    }
+
+class Meas_Subquery(Subquery):
+    # filters cohort based on presence or absence of stated criteria in the measurement domain
+    __tablename__ = 'meas_subquery'
+    subquery_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), primary_key=True)
+
+    def get_filter(self):
+        return self.subquery_combination.combiner()(*[sq.get_filter_details(self.filter_field) for sq in self.query_rules])
+    
+    __mapper_args__ = {
+        "polymorphic_identity": "measurement",
         'inherit_condition': (subquery_id == Subquery.subquery_id)
     }
 
