@@ -5,7 +5,7 @@ import sqlalchemy.orm as so
 from omop_alchemy.db import Base
 from omop_alchemy.model.vocabulary import Concept, Concept_Ancestor
 from omop_alchemy.model.clinical import Condition_Occurrence, Person, Observation, Procedure_Occurrence, Measurement
-from omop_alchemy.model.onco_ext import Condition_Episode
+from omop_alchemy.model.onco_ext import Condition_Episode, Systemic_Therapy_Episode
 from sqlalchemy import Enum
 import enum, uuid
 from itertools import chain
@@ -47,17 +47,19 @@ class RuleTarget(enum.Enum):
     meas_concept = 17
 
     def target_table(self):
-        return {1: (Condition_Episode.person_id, Condition_Episode.episode_id.label('measure_resolver')), 
-                2: (Condition_Episode.person_id, Condition_Episode.episode_id.label('measure_resolver')), 
-                3: (Condition_Episode.person_id, Condition_Episode.episode_id.label('measure_resolver')), 
-                4: (Condition_Episode.person_id, Condition_Episode.episode_id.label('measure_resolver')), 
-                5: (Condition_Episode.person_id, Condition_Episode.episode_id.label('measure_resolver')),
-                12: (Person.person_id, Person.person_id.label('measure_resolver')),
-                13: (Person.person_id, Person.person_id.label('measure_resolver')),
-                14: (Observation.person_id, Observation.person_id.label('measure_resolver')),
-                15: (Observation.person_id, Observation.person_id.label('measure_resolver')),
-                16: (Procedure_Occurrence.person_id, Procedure_Occurrence.person_id.label('measure_resolver')),
-                17: (Measurement.person_id, Measurement.person_id.label('measure_resolver'))}[self.value]
+        return {1: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
+                2: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
+                3: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
+                4: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
+                5: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')),
+               # 8: (Chemo_LoT.person_id, Chemo_LoT.episode_id, Chemo_LoT.episode_id.label('measure_resolver')),
+                9: (Systemic_Therapy_Episode.person_id, Systemic_Therapy_Episode.episode_id, Systemic_Therapy_Episode.episode_id.label('measure_resolver')),
+                12: (Person.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
+                13: (Person.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
+                14: (Observation.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Observation.person_id.label('measure_resolver')),
+                15: (Observation.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Observation.person_id.label('measure_resolver')),
+                16: (Procedure_Occurrence.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Procedure_Occurrence.person_id.label('measure_resolver')),
+                17: (Measurement.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver'))}[self.value]
 
     def target_options(self):
         return {1: Condition_Episode.condition_concept_id, 
@@ -65,6 +67,8 @@ class RuleTarget(enum.Enum):
                 3: Condition_Episode.condition_concept_id, 
                 4: Condition_Episode.condition_concept_id, 
                 5: Condition_Episode.modifier_concepts,
+                8: Chemo_Episode.episode_id,
+                9: Chemo_Episode.episode_id,
                 12: Person.gender_concept_id,
                 13: Person.death_datetime,
                 14: Observation.value_as_concept_id,
@@ -127,6 +131,7 @@ class RuleTemporality(enum.Enum):
     def target_date_field(self):
         return {1: Condition_Occurrence.condition_start_date,
                 2: Person.death_datetime,
+                3: Chemo_Episode.chemo_start,
                 4: Observation.observation_date,
                 5: Procedure_Occurrence.procedure_date,
                 9: Measurement.measurement_date}[self.value]
@@ -188,6 +193,7 @@ class Report(Base):
 
     denominator_measures: AssociationProxy[List["Measure"]] = association_proxy("indicators", "denominator_measure")
     numerator_measures: AssociationProxy[List["Measure"]] = association_proxy("indicators", "numerator_measure")
+    #report_cohorts: AssociationProxy[List["Dash_Cohort"]] = association_proxy("cohorts", "cohort")
 
     @property
     def report_cohorts(self): 
@@ -203,7 +209,7 @@ class Report(Base):
 
     @property
     def report_measures(self):
-        return list(set(self.numerator_measures + self.denominator_measures + self.cohort_measures))
+        return sorted(set(self.numerator_measures + self.denominator_measures + self.cohort_measures), key=lambda x: x.id)
 
     @property
     def members(self):
@@ -337,8 +343,8 @@ class Dash_Cohort(Base):
                                                                       back_populates="dash_cohort_objects")
 
     measures: AssociationProxy[List["Measure"]] = association_proxy("definitions", "dash_cohort_measure")
+    measure_ids: AssociationProxy[List[int]] = association_proxy("definitions", "measure_id")
                                                                     
-
     @property
     def cohort_def_labels(self):
         return [(self.dash_cohort_name, d.dash_cohort_def_name, d.measure_id) for d in self.definitions]
@@ -354,6 +360,7 @@ class Dash_Cohort(Base):
     @property
     def measure_count(self):
         return len(self.measures)
+        
 #        return sum([d.measure_count for d in self.cohort.definitions])
 
 class Dash_Cohort_Def(Base):
@@ -371,7 +378,9 @@ class Dash_Cohort_Def(Base):
     
     dash_cohort_objects: so.Mapped[List['Dash_Cohort']] = so.relationship(secondary=dash_cohort_def_map, 
                                                                           back_populates="definitions")
+
     dash_cohort_measure: so.Mapped['Measure'] = so.relationship("Measure", foreign_keys=[measure_id], back_populates='in_dash_cohort')
+
 
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
@@ -386,8 +395,9 @@ class Dash_Cohort_Def(Base):
         self._members = []
 
     def execute_cohort(self, db):
-        query = self.get_cohort()
-        self._members = db.execute(sa.Select(query.c).distinct()).all()
+        self._members = self.dash_cohort_measure.execute_measure(db)
+        # query = self.get_cohort()
+        # self._members = db.execute(sa.Select(query.c).distinct()).all()
 
     def get_cohort(self):
         return self.dash_cohort_measure.get_measure()
@@ -400,6 +410,7 @@ class Dash_Cohort_Def(Base):
         if self.dash_cohort_measure:
             return self.dash_cohort_measure.measure_count
         return 0
+
         
 
 class Measure(Base):
@@ -428,17 +439,33 @@ class Measure(Base):
     parent_measures: so.Mapped[List["Measure_Relationship"]] = so.relationship("Measure_Relationship", 
                                                                                foreign_keys="Measure_Relationship.child_measure_id", 
                                                                                viewonly=True)
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+        self.init_on_load()
+
+    @so.reconstructor
+    def init_on_load(self):
+        self._members = []
+
     def get_measure(self):
         if self.subquery:
             return self.subquery.get_subquery(self.measure_combination)
         return self.measure_combination.combiner()(*[m.get_measure() for m in self.children])
 
-    def execute_measure(self, db, people=[]):
+    def execute_measure(self, db, people=[], force_refresh=False):
+        # nb this does not currently return distinct rows - todo?
+        if not force_refresh and len(self._members) > 0:
+            return self._members
         query = self.get_measure()
         if len(people) > 0:
             query = sa.select(query.subquery()).filter(sa.column('person_id').in_(people))
-        results = db.execute(query).all()
-        return results
+        self._members = db.execute(query).all()
+        return self._members
+    
+    @property
+    def members(self):
+        return self._members
     
     @property
     def children(self):
