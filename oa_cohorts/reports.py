@@ -67,8 +67,8 @@ class RuleTarget(enum.Enum):
                 3: Condition_Episode.condition_concept_id, 
                 4: Condition_Episode.condition_concept_id, 
                 5: Condition_Episode.modifier_concepts,
-                8: Chemo_Episode.episode_id,
-                9: Chemo_Episode.episode_id,
+              #  8: Chemo_Episode.episode_id,
+              #  9: Chemo_Episode.episode_id,
                 12: Person.gender_concept_id,
                 13: Person.death_datetime,
                 14: Observation.value_as_concept_id,
@@ -131,7 +131,7 @@ class RuleTemporality(enum.Enum):
     def target_date_field(self):
         return {1: Condition_Occurrence.condition_start_date,
                 2: Person.death_datetime,
-                3: Chemo_Episode.chemo_start,
+               # 3: Chemo_Episode.chemo_start,
                 4: Observation.observation_date,
                 5: Procedure_Occurrence.procedure_date,
                 9: Measurement.measurement_date}[self.value]
