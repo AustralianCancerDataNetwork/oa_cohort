@@ -5,7 +5,7 @@ import sqlalchemy.orm as so
 from omop_alchemy.db import Base
 from omop_alchemy.model.vocabulary import Concept, Concept_Ancestor
 from omop_alchemy.model.clinical import Condition_Occurrence, Person, Observation, Procedure_Occurrence, Measurement
-from omop_alchemy.model.onco_ext import Condition_Episode, Systemic_Therapy_Episode
+from omop_alchemy.model.onco_ext import Condition_Episode, Systemic_Therapy_Episode, Historical_Surgical_Procedure, Dated_Surgical_Procedure, Radiation_Therapy_Episode, Dx_Treat_Start, Dx_RT_Start, Dx_SACT_Start
 from sqlalchemy import Enum
 import enum, uuid
 from itertools import chain
@@ -39,6 +39,8 @@ class RuleTarget(enum.Enum):
     tx_chemotherapy = 9
     tx_radiotherapy = 10
     tx_surgical = 11
+    # todo add a rule target for surgical history vs. surgical procedure
+    # i.e. - observation.value_as_concept_id = 4301352 for surgical history on lung / procedure_concept_id = [specific procedure code]
     demog_gender = 12
     demog_death = 13
     obs_value = 14
@@ -46,14 +48,16 @@ class RuleTarget(enum.Enum):
     proc_concept = 16
     meas_concept = 17
 
-    def target_table(self):
+    def table_selectables(self):
         return {1: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
                 2: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
                 3: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
                 4: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
                 5: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')),
-               # 8: (Chemo_LoT.person_id, Chemo_LoT.episode_id, Chemo_LoT.episode_id.label('measure_resolver')),
-                9: (Systemic_Therapy_Episode.person_id, Systemic_Therapy_Episode.episode_id, Systemic_Therapy_Episode.episode_id.label('measure_resolver')),
+                8: (Dx_Treat_Start.person_id, Dx_Treat_Start.dx_id.label('episode_id'), Dx_Treat_Start.dx_id.label('measure_resolver')),
+                9: (Dx_SACT_Start.person_id, Dx_SACT_Start.dx_id.label('episode_id'), Dx_SACT_Start.dx_id.label('measure_resolver')),
+                10: (Dx_RT_Start.person_id, Dx_RT_Start.dx_id.label('episode_id'), Dx_RT_Start.dx_id.label('measure_resolver')),
+                11: (Dated_Surgical_Procedure.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Dated_Surgical_Procedure.person_id.label('measure_resolver')),
                 12: (Person.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
                 13: (Person.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
                 14: (Observation.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Observation.person_id.label('measure_resolver')),
@@ -61,14 +65,26 @@ class RuleTarget(enum.Enum):
                 16: (Procedure_Occurrence.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Procedure_Occurrence.person_id.label('measure_resolver')),
                 17: (Measurement.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver'))}[self.value]
 
+    def target_table(self, ep_override=False):
+        target_cols = self.table_selectables()
+        if ep_override:
+            # for targets that should be resolved by episode but have not been inserted within the requisite hierarchy, override the target and 
+            # default to person_id as the measure resolver
+            return (target_cols[0], sa.sql.expression.literal_column('0').label('episode_id'), target_cols[0].label('measure_resolver')) 
+        return target_cols
+
+
     def target_options(self):
         return {1: Condition_Episode.condition_concept_id, 
                 2: Condition_Episode.condition_concept_id, 
                 3: Condition_Episode.condition_concept_id, 
                 4: Condition_Episode.condition_concept_id, 
                 5: Condition_Episode.modifier_concepts,
-              #  8: Chemo_Episode.episode_id,
-              #  9: Chemo_Episode.episode_id,
+                8: Dx_Treat_Start.dx_id, #Systemic_Therapy_Episode.episode_id,
+                9: Dx_SACT_Start.dx_id, #Systemic_Therapy_Episode.episode_id, #Chemo_Episode.episode_id,
+                10: Dx_RT_Start.dx_id, #Radiation_Therapy_Episode.episode_id, #Chemo_Episode.episode_id,
+                11: Dated_Surgical_Procedure.procedure_concept_id,
+                #11: Procedure_Occurrence.procedure_concept_id,
                 12: Person.gender_concept_id,
                 13: Person.death_datetime,
                 14: Observation.value_as_concept_id,
@@ -116,6 +132,7 @@ class RuleMatcher(enum.Enum):
     hierarchy = 3
     absence = 4
     presence = 5
+    hierarchyexclusion = 6
 
 class RuleTemporality(enum.Enum):
     dt_current_start = 1
@@ -123,18 +140,28 @@ class RuleTemporality(enum.Enum):
     dt_treatment_start = 3
     dt_obs = 4
     dt_proc_start = 5
-    dt_numerator = 6
-    dt_denominator = 7
+    dt_numerator = 6 # change this 
+    dt_denominator = 7 # change this 
     dt_any = 8
     dt_meas = 9
+    dt_rad = 10
+    dt_surg = 11
+    dt_treat = 12 # this needs to be renamed for sact
     
     def target_date_field(self):
         return {1: Condition_Occurrence.condition_start_date,
                 2: Person.death_datetime,
-               # 3: Chemo_Episode.chemo_start,
+                3: Dx_Treat_Start.treatment_start, 
                 4: Observation.observation_date,
                 5: Procedure_Occurrence.procedure_date,
-                9: Measurement.measurement_date}[self.value]
+                6: Dx_RT_Start.rt_start, 
+                7: Dated_Surgical_Procedure.procedure_datetime,
+                # this needs to be extended to allow for historical treatments
+                8: Historical_Surgical_Procedure.history_datettime,
+                9: Measurement.measurement_date,
+                10: Dx_RT_Start.rt_start,
+                11: Dated_Surgical_Procedure.procedure_datetime, 
+                12: Dx_SACT_Start.sact_start}[self.value]
 
 class ReportStatus(enum.Enum):
     st_current = 1
@@ -193,7 +220,6 @@ class Report(Base):
 
     denominator_measures: AssociationProxy[List["Measure"]] = association_proxy("indicators", "denominator_measure")
     numerator_measures: AssociationProxy[List["Measure"]] = association_proxy("indicators", "numerator_measure")
-    #report_cohorts: AssociationProxy[List["Dash_Cohort"]] = association_proxy("cohorts", "cohort")
 
     @property
     def report_cohorts(self): 
@@ -361,8 +387,6 @@ class Dash_Cohort(Base):
     def measure_count(self):
         return len(self.measures)
         
-#        return sum([d.measure_count for d in self.cohort.definitions])
-
 class Dash_Cohort_Def(Base):
     """Conceptually-useful filtering units for end users.
 
@@ -429,6 +453,7 @@ class Measure(Base):
     measure_name: so.Mapped[str] = so.mapped_column(sa.String(250))
     measure_combination: so.Mapped[int] = so.mapped_column(sa.Enum(RuleCombination)) # rule_and, rule_or, rule_except
     subquery_id: so.Mapped[Optional[int]] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), nullable=True)
+    person_ep_override: so.Mapped[bool] = so.mapped_column(sa.Boolean)
     
     subquery: so.Mapped["Subquery"] = so.relationship("Subquery", foreign_keys=[subquery_id], back_populates='measures')
     in_dash_cohort: so.Mapped[List['Dash_Cohort_Def']] = so.relationship("Dash_Cohort_Def", back_populates="dash_cohort_measure")
@@ -448,10 +473,11 @@ class Measure(Base):
     def init_on_load(self):
         self._members = []
 
-    def get_measure(self):
+    def get_measure(self, ep_override=False):
+        ep_override = self.person_ep_override or ep_override
         if self.subquery:
-            return self.subquery.get_subquery(self.measure_combination)
-        return self.measure_combination.combiner()(*[m.get_measure() for m in self.children])
+            return self.subquery.get_subquery(self.measure_combination, ep_override)
+        return self.measure_combination.combiner()(*[m.get_measure(ep_override) for m in self.children])
 
     def execute_measure(self, db, people=[], force_refresh=False):
         # nb this does not currently return distinct rows - todo?
@@ -522,6 +548,10 @@ class Subquery(Base):
     measures: so.Mapped[List['Measure']] = so.relationship("Measure", back_populates='subquery')
     query_rules: so.Mapped[List['Query_Rule']] = so.relationship(secondary=query_rule_map, back_populates="subqueries")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ep_override = False
+
     @property
     def subquery_matcher(self):
         if len(self.query_rules) == 0:
@@ -534,7 +564,7 @@ class Subquery(Base):
 
     @property
     def filter_table(self):
-        return (*self.subquery_target.target_table(), self.subquery_temporality.target_date_field().label('measure_date'))
+        return (*self.subquery_target.target_table(self.ep_override), self.subquery_temporality.target_date_field().label('measure_date'))
 
     __mapper_args__ = {
         "polymorphic_on":sa.case(
@@ -547,7 +577,8 @@ class Subquery(Base):
         "polymorphic_identity":"subquery_type"
     }
 
-    def get_subquery(self, subquery_combination):
+    def get_subquery(self, subquery_combination, ep_override):
+        self.ep_override = ep_override
         if len(self.query_rules) == 0:
             return None
         qr = [sa.select(*self.filter_table).filter(sq.get_filter_details(self.filter_field)) for sq in self.query_rules]
@@ -710,6 +741,13 @@ class Hierarchy_Query_Rule(Query_Rule):
         return field.in_(self.comparator)
 
     __mapper_args__ = { "polymorphic_identity": "hierarchy" }
+
+class Hierarchy_Exclusion_Rule(Hierarchy_Query_Rule):
+
+    def get_filter_details(self, field):
+        return field.notin(self.comparator)
+
+    __mapper_args__ = { "polymorphic_identity": "hierarchyexclusion" }
 
 
 @sa.event.listens_for(Hierarchy_Query_Rule, 'load')
