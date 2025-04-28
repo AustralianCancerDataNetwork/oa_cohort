@@ -11,6 +11,9 @@ import enum, uuid
 from itertools import chain
 
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
+import logging, shutil
+
+logger = logging.getLogger(__name__)
 
 
 # valid subquery combinations:
@@ -49,21 +52,22 @@ class RuleTarget(enum.Enum):
     meas_concept = 17
 
     def table_selectables(self):
-        return {1: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
-                2: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
-                3: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
-                4: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')), 
-                5: (Condition_Episode.person_id, Condition_Episode.episode_id, Condition_Episode.episode_id.label('measure_resolver')),
-                8: (Dx_Treat_Start.person_id, Dx_Treat_Start.dx_id.label('episode_id'), Dx_Treat_Start.dx_id.label('measure_resolver')),
-                9: (Dx_SACT_Start.person_id, Dx_SACT_Start.dx_id.label('episode_id'), Dx_SACT_Start.dx_id.label('measure_resolver')),
-                10: (Dx_RT_Start.person_id, Dx_RT_Start.dx_id.label('episode_id'), Dx_RT_Start.dx_id.label('measure_resolver')),
-                11: (Dated_Surgical_Procedure.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Dated_Surgical_Procedure.person_id.label('measure_resolver')),
-                12: (Person.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
-                13: (Person.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
-                14: (Observation.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Observation.person_id.label('measure_resolver')),
-                15: (Observation.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Observation.person_id.label('measure_resolver')),
-                16: (Procedure_Occurrence.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Procedure_Occurrence.person_id.label('measure_resolver')),
-                17: (Measurement.person_id, sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver'))}[self.value]
+        # using explicit labels even where not strictly necessary for convenient handling 
+        return {1: (Condition_Episode.person_id.label('person_id'), Condition_Episode.episode_id.label('episode_id'), Condition_Episode.episode_id.label('measure_resolver')), 
+                2: (Condition_Episode.person_id.label('person_id'), Condition_Episode.episode_id.label('episode_id'), Condition_Episode.episode_id.label('measure_resolver')), 
+                3: (Condition_Episode.person_id.label('person_id'), Condition_Episode.episode_id.label('episode_id'), Condition_Episode.episode_id.label('measure_resolver')), 
+                4: (Condition_Episode.person_id.label('person_id'), Condition_Episode.episode_id.label('episode_id'), Condition_Episode.episode_id.label('measure_resolver')), 
+                5: (Condition_Episode.person_id.label('person_id'), Condition_Episode.episode_id.label('episode_id'), Condition_Episode.episode_id.label('measure_resolver')),
+                8: (Dx_Treat_Start.person_id.label('person_id'), Dx_Treat_Start.dx_id.label('episode_id'), Dx_Treat_Start.dx_id.label('measure_resolver')),
+                9: (Dx_SACT_Start.person_id.label('person_id'), Dx_SACT_Start.dx_id.label('episode_id'), Dx_SACT_Start.dx_id.label('measure_resolver')),
+                10: (Dx_RT_Start.person_id.label('person_id'), Dx_RT_Start.dx_id.label('episode_id'), Dx_RT_Start.dx_id.label('measure_resolver')),
+                11: (Dated_Surgical_Procedure.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Dated_Surgical_Procedure.person_id.label('measure_resolver')),
+                12: (Person.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
+                13: (Person.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
+                14: (Observation.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Observation.person_id.label('measure_resolver')),
+                15: (Observation.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Observation.person_id.label('measure_resolver')),
+                16: (Procedure_Occurrence.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Procedure_Occurrence.person_id.label('measure_resolver')),
+                17: (Measurement.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver'))}[self.value]
 
     def target_table(self, ep_override=False):
         target_cols = self.table_selectables()
@@ -126,6 +130,7 @@ class RuleType(enum.Enum):
     person_rule = 4
     proc_rule = 5
     meas_rule = 6
+    
 class RuleMatcher(enum.Enum):
     substring = 1
     exact = 2
@@ -476,8 +481,61 @@ class Measure(Base):
     def get_measure(self, ep_override=False):
         ep_override = self.person_ep_override or ep_override
         if self.subquery:
-            return self.subquery.get_subquery(self.measure_combination, ep_override)
-        return self.measure_combination.combiner()(*[m.get_measure(ep_override) for m in self.children])
+            return self.subquery.get_subquery_any(ep_override)
+        elif self.measure_combination==RuleCombination.rule_or:
+            return sa.union_all(*[m.get_measure(ep_override) for m in self.children])
+        else:
+            return self.get_measure_first_qualifying(ep_override)
+        #return self.measure_combination.combiner()(*[m.get_measure(ep_override) for m in self.children])
+
+    def get_measure_any(self, ep_override=False):
+        ep_override = self.person_ep_override or ep_override
+        if self.subquery:
+            return self.subquery.get_subquery_any(ep_override)
+        else:
+            return sa.union(*[m.get_measure_any(ep_override) for m in self.children])
+
+    def get_measure_earliest(self, ep_override=False):
+        m = self.get_measure(ep_override).subquery()
+        earliest = (
+            sa.select(
+                m.c.person_id, 
+                m.c.episode_id, 
+                m.c.measure_resolver, 
+                sa.func.min(m.c.measure_date).label('measure_date')
+            )
+            .group_by(m.c.person_id, m.c.episode_id, m.c.measure_resolver)
+        )
+        return earliest
+        
+    def get_measure_first_qualifying(self, ep_override=False):
+        # as per subquery_all - this is required to get the first qualifying date for this subquery
+        if self.subquery:
+            return self.subquery.get_subquery_first(ep_override)      
+
+        #earliest_qualifiers = [c.get_measure_first(ep_override).subquery() for c in self.children]
+        earliest_qualifiers = [c.get_measure_earliest(ep_override).subquery() for c in self.children]
+
+        start = earliest_qualifiers[0]
+        lhs = earliest_qualifiers[0]        
+        date_columns = [lhs.c.measure_date]
+
+        for rhs in earliest_qualifiers[1:]:
+            lhs = lhs.join(
+                        rhs, start.c.measure_resolver==rhs.c.measure_resolver
+                  )
+            date_columns.append(rhs.c.measure_date)
+
+        combined = sa.select(
+            start.c.person_id, start.c.episode_id, start.c.measure_resolver, sa.func.greatest(*date_columns).label('measure_date')
+        ).select_from(lhs)
+
+        return combined
+
+    
+    def get_measure_date(self):
+        if self.subquery:
+            return self.subquery.subquery_date
 
     def execute_measure(self, db, people=[], force_refresh=False):
         # nb this does not currently return distinct rows - todo?
@@ -547,7 +605,7 @@ class Subquery(Base):
 
     measures: so.Mapped[List['Measure']] = so.relationship("Measure", back_populates='subquery')
     query_rules: so.Mapped[List['Query_Rule']] = so.relationship(secondary=query_rule_map, back_populates="subqueries")
-
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.ep_override = False
@@ -564,6 +622,10 @@ class Subquery(Base):
 
     @property
     def filter_table(self):
+        return self.subquery_target.target_table(self.ep_override)
+        
+    @property
+    def filter_table_dated(self):
         return (*self.subquery_target.target_table(self.ep_override), self.subquery_temporality.target_date_field().label('measure_date'))
 
     __mapper_args__ = {
@@ -577,19 +639,46 @@ class Subquery(Base):
         "polymorphic_identity":"subquery_type"
     }
 
-    def get_subquery(self, subquery_combination, ep_override):
+    def get_subquery_any(self, ep_override):
+        # call this if the measure combination is OR - for this one you can allow through ANY of the dates that the 
+        # person qualifies for the measure --> we are performing a UNION and therefore do not need to do anything 
+        # clever to resolve which of the record dates can be used as the basis.
         self.ep_override = ep_override
         if len(self.query_rules) == 0:
             return None
-        qr = [sa.select(*self.filter_table).filter(sq.get_filter_details(self.filter_field)) for sq in self.query_rules]
-        query = subquery_combination.combiner()(*qr)
+        qr = [sa.select(*self.filter_table_dated).filter(sq.get_filter_details(self.filter_field)) for sq in self.query_rules]
+        query = sa.union_all(*qr)
         return query
 
-    def get_filter(self, str_match=False):
-        # given the properties of subquery type (dx, tx, person, observation or procedure)
-        # this function will combine the associated query rules to produce the required filter
-        # for selecting the target cohort
-        raise NotImplemented()
+    def get_subquery_undated(self, ep_override):
+        # call this if the measure combination is AND - for this one you need to return the earliest date that the
+        # person qualifies for the measure --> we then take the intersection of the undated columns, join with the 
+        # first date that each subquery is met, and then take the max of the min dates (i.e. the first date that 
+        # ALL conditions are met...)
+        self.ep_override = ep_override
+        if len(self.query_rules) == 0:
+            return None
+        # n.b. ALL subqueries must be combined with an OR - if you need to 'AND' concepts together, they must be put into
+        # separate measures and combined thusly
+        qr = [sa.select(*self.filter_table).filter(sq.get_filter_details(self.filter_field)) for sq in self.query_rules]
+        query = sa.union_all(*qr)
+        return query
+
+    def get_subquery_first(self, ep_override):
+        # as per subquery_all - this is required to get the first qualifying date for this subquery
+        sq = self.get_subquery_any(ep_override).subquery()
+        dt = sa.select(
+                sq.c.person_id, 
+                sq.c.episode_id, 
+                sq.c.measure_resolver, 
+                sa.func.min(sq.c.measure_date).label('measure_date')
+             ).group_by(
+                sq.c.person_id, 
+                sq.c.episode_id,
+                sq.c.measure_resolver
+             )
+        return dt
+
 
 class Dx_Subquery(Subquery):
     # filters cohort based on presence or absence of stated criteria in diagnostic episodes
@@ -597,6 +686,9 @@ class Dx_Subquery(Subquery):
     # todo: why is this concrete inheritence? tbc?
     __tablename__ = 'dx_subquery'
     subquery_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), primary_key=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def get_filter(self):
         # todo: check allowed combinations of target and type
@@ -613,7 +705,10 @@ class Tx_Subquery(Subquery):
     # filters cohort based on presence or absence of stated criteria in treatment episodes
     __tablename__ = 'tx_subquery'
     subquery_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), primary_key=True)
-    
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def get_filter(self):
         raise NotImplemented()
 
@@ -626,7 +721,10 @@ class Obs_Subquery(Subquery):
     # filters cohort based on presence or absence of stated criteria in the observation domain
     __tablename__ = 'obs_subquery'
     subquery_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), primary_key=True)
-    
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def get_filter(self):
         raise NotImplemented()
         # field = self.subquery_target.target(self.query_rules[0].query_matcher == RuleMatcher.substring)
@@ -642,6 +740,9 @@ class Proc_Subquery(Subquery):
     __tablename__ = 'proc_subquery'
     subquery_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), primary_key=True)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def get_filter(self):
         return self.subquery_combination.combiner()(*[sq.get_filter_details(self.filter_field) for sq in self.query_rules])
 
@@ -655,6 +756,9 @@ class Meas_Subquery(Subquery):
     __tablename__ = 'meas_subquery'
     subquery_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), primary_key=True)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
     def get_filter(self):
         return self.subquery_combination.combiner()(*[sq.get_filter_details(self.filter_field) for sq in self.query_rules])
     
@@ -667,6 +771,9 @@ class Person_Subquery(Subquery):
     # filters cohort based on demographic criteria
     __tablename__ = 'person_subquery'
     subquery_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('subquery.subquery_id'), primary_key=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def get_filter(self):
         return self.subquery_combination.combiner()(*[sq.get_filter_details(self.filter_field) for sq in self.query_rules])
@@ -758,6 +865,7 @@ def get_standard_hierarchy(target, context):
                                     ).options(so.joinedload(Concept_Ancestor.descendant)
                                     ).filter(Concept_Ancestor.ancestor_concept_id == target.query_concept_id).distinct().all()
     target.children = [c.descendant for c in children]
+    
 class Substring_Query_Rule(Query_Rule):
     
     @property
@@ -785,3 +893,45 @@ class Presence_Query_Rule(Query_Rule):
 
     def get_filter_details(self, field):
         return field.is_not(None)
+
+
+
+
+
+# sq2 = m2.subquery.get_subquery_first(True).subquery()
+
+# j = sa.join(
+#         sq1,
+#         sq2,
+#         sa.and_(
+#             sq1.c.person_id == sq2.c.person_id,
+#             sq1.c.episode_id == sq2.c.episode_id,
+#             sq1.c.measure_resolver == sq2.c.measure_resolver
+#         )
+#     )
+
+# combined = (
+#     sa.select(
+#         sq1.c.person_id,
+#         sq1.c.episode_id,
+#         sq1.c.measure_resolver,
+#         sa.func.greatest(sq1.c.first_qualifying_date, sq2.c.first_qualifying_date).label('first_qualifying_date')
+#     )
+#     .select_from(j)
+#     .subquery()
+# )
+
+# comb = pd.DataFrame(
+#     db.execute(
+#         sa.select(
+#             sq1.c.person_id,
+#             sq1.c.episode_id,
+#             sq1.c.measure_resolver,
+#             sa.func.greatest(sq1.c.first_qualifying_date, sq2.c.first_qualifying_date).label('first_qualifying_date')
+#         )
+#         .select_from(j)
+#     )
+# )
+    
+
+    
