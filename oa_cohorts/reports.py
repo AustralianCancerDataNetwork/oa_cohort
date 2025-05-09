@@ -1,11 +1,11 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional, List
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from omop_alchemy.db import Base
 from omop_alchemy.model.vocabulary import Concept, Concept_Ancestor
 from omop_alchemy.model.clinical import Condition_Occurrence, Person, Observation, Procedure_Occurrence, Measurement
-from omop_alchemy.model.onco_ext import Condition_Episode, Systemic_Therapy_Episode, Historical_Surgical_Procedure, Dated_Surgical_Procedure, Radiation_Therapy_Episode, Dx_Treat_Start, Dx_RT_Start, Dx_SACT_Start
+from omop_alchemy.conventions.constructs import Condition_Episode, Historical_Surgical_Procedure, Dated_Surgical_Procedure, Dx_Treat_Start, Dx_RT_Start, Dx_SACT_Start, Dx_Surg, Treatment_Window, Dx_Concurrent_Start
 from sqlalchemy import Enum
 import enum, uuid
 from itertools import chain
@@ -50,6 +50,12 @@ class RuleTarget(enum.Enum):
     obs_concept = 15
     proc_concept = 16
     meas_concept = 17
+    # todo consider splitting windows and other scalars into their own class?
+    tx_to_death_window = 18
+    dx_to_tx_window = 19
+    referral_to_tx_window = 20
+    referral_to_specialist_window = 21
+    tx_concurrent = 22
 
     def table_selectables(self):
         # using explicit labels even where not strictly necessary for convenient handling 
@@ -61,13 +67,16 @@ class RuleTarget(enum.Enum):
                 8: (Dx_Treat_Start.person_id.label('person_id'), Dx_Treat_Start.dx_id.label('episode_id'), Dx_Treat_Start.dx_id.label('measure_resolver')),
                 9: (Dx_SACT_Start.person_id.label('person_id'), Dx_SACT_Start.dx_id.label('episode_id'), Dx_SACT_Start.dx_id.label('measure_resolver')),
                 10: (Dx_RT_Start.person_id.label('person_id'), Dx_RT_Start.dx_id.label('episode_id'), Dx_RT_Start.dx_id.label('measure_resolver')),
-                11: (Dated_Surgical_Procedure.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Dated_Surgical_Procedure.person_id.label('measure_resolver')),
+                11: (Dx_Surg.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Dx_Surg.person_id.label('measure_resolver')),
+                #11: (Dated_Surgical_Procedure.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Dated_Surgical_Procedure.person_id.label('measure_resolver')),
                 12: (Person.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
                 13: (Person.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
                 14: (Observation.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Observation.person_id.label('measure_resolver')),
                 15: (Observation.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Observation.person_id.label('measure_resolver')),
                 16: (Procedure_Occurrence.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Procedure_Occurrence.person_id.label('measure_resolver')),
-                17: (Measurement.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver'))}[self.value]
+                17: (Measurement.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver')),
+                18: (Treatment_Window.person_id.label('person_id'), Treatment_Window.episode_id.label('episode_id'), Treatment_Window.person_id.label('measure_resolver')),
+                22: (Dx_Concurrent_Start.person_id.label('person_id'), Dx_Concurrent_Start.dx_id.label('episode_id'), Dx_Concurrent_Start.dx_id.label('measure_resolver'))}[self.value]
 
     def target_table(self, ep_override=False):
         target_cols = self.table_selectables()
@@ -87,14 +96,16 @@ class RuleTarget(enum.Enum):
                 8: Dx_Treat_Start.dx_id, #Systemic_Therapy_Episode.episode_id,
                 9: Dx_SACT_Start.dx_id, #Systemic_Therapy_Episode.episode_id, #Chemo_Episode.episode_id,
                 10: Dx_RT_Start.dx_id, #Radiation_Therapy_Episode.episode_id, #Chemo_Episode.episode_id,
-                11: Dated_Surgical_Procedure.procedure_concept_id,
+                11: Dx_Surg.surgery_concept_id,
                 #11: Procedure_Occurrence.procedure_concept_id,
                 12: Person.gender_concept_id,
                 13: Person.death_datetime,
                 14: Observation.value_as_concept_id,
                 15: Observation.observation_concept_id,
                 16: Procedure_Occurrence.procedure_concept_id,
-                17: Measurement.measurement_concept_id}
+                17: Measurement.measurement_concept_id,
+                18: Treatment_Window.treatment_days_before_death,
+                22: Dx_Concurrent_Start.dx_id}
 
     def string_target_options(self):
         return {1: Condition_Occurrence.condition_code, 
@@ -117,6 +128,14 @@ class RuleCombination(enum.Enum):
     rule_and = 2
     rule_except = 3
 
+    @property
+    def label(self):
+        return {
+            1: 'OR',
+            2: 'AND',
+            3: 'EXCEPT'
+        }[self.value]
+
     def combiner_options(self):
         return {1: sa.union_all, 2: sa.intersect_all, 3: sa.except_all}
 
@@ -130,6 +149,10 @@ class RuleType(enum.Enum):
     person_rule = 4
     proc_rule = 5
     meas_rule = 6
+
+class ThresholdDirection(enum.Enum):
+    gt = 1
+    lt = 2
     
 class RuleMatcher(enum.Enum):
     substring = 1
@@ -138,6 +161,7 @@ class RuleMatcher(enum.Enum):
     absence = 4
     presence = 5
     hierarchyexclusion = 6
+    scalar = 7
 
 class RuleTemporality(enum.Enum):
     dt_current_start = 1
@@ -152,6 +176,8 @@ class RuleTemporality(enum.Enum):
     dt_rad = 10
     dt_surg = 11
     dt_treat = 12 # this needs to be renamed for sact
+    dt_treatment_end = 13
+    dt_concurrent = 14
     
     def target_date_field(self):
         return {1: Condition_Occurrence.condition_start_date,
@@ -164,9 +190,12 @@ class RuleTemporality(enum.Enum):
                 # this needs to be extended to allow for historical treatments
                 8: Historical_Surgical_Procedure.history_datettime,
                 9: Measurement.measurement_date,
-                10: Dx_RT_Start.rt_start,
-                11: Dated_Surgical_Procedure.procedure_datetime, 
-                12: Dx_SACT_Start.sact_start}[self.value]
+                # coalesce function required here for dates of dx to propagate where query_matcher = absence
+                10: sa.func.coalesce(Dx_RT_Start.rt_start, Dx_RT_Start.dx_date),
+                11: sa.func.coalesce(Dx_Surg.surg_date, Dx_Surg.dx_date), 
+                12: sa.func.coalesce(Dx_SACT_Start.sact_start, Dx_SACT_Start.dx_date),
+                13: Treatment_Window.latest_treatment,
+                14: sa.func.coalesce(Dx_Concurrent_Start.treatment_start, Dx_Concurrent_Start.dx_date)}[self.value]
 
 class ReportStatus(enum.Enum):
     st_current = 1
@@ -412,7 +441,7 @@ class Dash_Cohort_Def(Base):
 
 
     def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.init_on_load()
 
     @property
@@ -471,7 +500,7 @@ class Measure(Base):
                                                                                viewonly=True)
     
     def __init__(self, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.init_on_load()
 
     @so.reconstructor
@@ -558,6 +587,12 @@ class Measure(Base):
     @property
     def depth(self):
         return 1 + max([c.depth for c in self.children] + [0])
+
+    @property
+    def height(self):
+        if not self.children:
+            return 1
+        return 1 + sum([c.height for c in self.children])
 
     @property
     def measure_count(self):
@@ -797,6 +832,10 @@ class Query_Rule(Base):
     query_concept_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('concept.concept_id'), default=0)
     query_notes: so.Mapped[Optional[str]] = so.mapped_column(sa.String(250), nullable=True)        
     
+    # these two columns are only used by Scalar_Threshold_Rule
+    scalar_threshold: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, nullable=True)
+    threshold_direction: so.Mapped[Optional[str]] = so.mapped_column(sa.Enum(ThresholdDirection), nullable=True)
+
     # relationships
     rule_concept: so.Mapped['Concept'] = so.relationship(foreign_keys=[query_concept_id])
     subqueries: so.Mapped[List['Subquery']] = so.relationship(secondary=query_rule_map, back_populates="query_rules")
@@ -807,6 +846,8 @@ class Query_Rule(Base):
             (query_matcher == RuleMatcher.hierarchy, "hierarchy"),
             (query_matcher == RuleMatcher.substring, "substring"),
             (query_matcher == RuleMatcher.absence, "absence"),
+            (query_matcher == RuleMatcher.hierarchyexclusion, "hierarchyexclusion"),
+            (query_matcher == RuleMatcher.scalar, "scalar"),
             else_="presence"),
         "polymorphic_identity":"query_rule"
     }
@@ -852,12 +893,13 @@ class Hierarchy_Query_Rule(Query_Rule):
 class Hierarchy_Exclusion_Rule(Hierarchy_Query_Rule):
 
     def get_filter_details(self, field):
-        return field.notin(self.comparator)
+        return field.not_in(self.comparator)
 
     __mapper_args__ = { "polymorphic_identity": "hierarchyexclusion" }
 
 
 @sa.event.listens_for(Hierarchy_Query_Rule, 'load')
+@sa.event.listens_for(Hierarchy_Exclusion_Rule, 'load')
 def get_standard_hierarchy(target, context):
     if not target.rule_concept:
         raise RuntimeError(f'Rule concept {target.query_concept_id} not found - unable to load query hierarchy')
@@ -894,44 +936,22 @@ class Presence_Query_Rule(Query_Rule):
     def get_filter_details(self, field):
         return field.is_not(None)
 
+class Scalar_Threshold_Rule(Query_Rule):
+    """Handles scalar threshold comparisons (greater than or less than a stored integer value)."""
 
+    @property
+    def comparator(self):
+        if self.scalar_threshold is None:
+            raise RuntimeError(f'Scalar threshold is not set on rule {self.query_rule_id}')
+        return self.scalar_threshold
 
+    def get_filter_details(self, field):
+        if self.threshold_direction == ThresholdDirection.gt:
+            return field > self.comparator
+        elif self.threshold_direction == ThresholdDirection.lt:
+            return field < self.comparator
+        else:
+            raise ValueError(f'Unknown threshold direction: {self.threshold_direction}')
 
+    __mapper_args__ = {"polymorphic_identity": "scalar"}
 
-# sq2 = m2.subquery.get_subquery_first(True).subquery()
-
-# j = sa.join(
-#         sq1,
-#         sq2,
-#         sa.and_(
-#             sq1.c.person_id == sq2.c.person_id,
-#             sq1.c.episode_id == sq2.c.episode_id,
-#             sq1.c.measure_resolver == sq2.c.measure_resolver
-#         )
-#     )
-
-# combined = (
-#     sa.select(
-#         sq1.c.person_id,
-#         sq1.c.episode_id,
-#         sq1.c.measure_resolver,
-#         sa.func.greatest(sq1.c.first_qualifying_date, sq2.c.first_qualifying_date).label('first_qualifying_date')
-#     )
-#     .select_from(j)
-#     .subquery()
-# )
-
-# comb = pd.DataFrame(
-#     db.execute(
-#         sa.select(
-#             sq1.c.person_id,
-#             sq1.c.episode_id,
-#             sq1.c.measure_resolver,
-#             sa.func.greatest(sq1.c.first_qualifying_date, sq2.c.first_qualifying_date).label('first_qualifying_date')
-#         )
-#         .select_from(j)
-#     )
-# )
-    
-
-    
