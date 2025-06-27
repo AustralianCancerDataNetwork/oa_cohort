@@ -5,7 +5,7 @@ import sqlalchemy.orm as so
 from omop_alchemy.db import Base
 from omop_alchemy.model.vocabulary import Concept, Concept_Ancestor
 from omop_alchemy.model.clinical import Condition_Occurrence, Person, Observation, Procedure_Occurrence, Measurement
-from omop_alchemy.conventions.constructs import Condition_Episode, Historical_Surgical_Procedure, Dated_Surgical_Procedure, Dx_Treat_Start, Dx_RT_Start, Dx_SACT_Start, Dx_Surg, Treatment_Window, Dx_Concurrent_Start
+from omop_alchemy.conventions.constructs import Condition_Episode, Historical_Surgical_Procedure, Dated_Surgical_Procedure, Dx_Treat_Start, Dx_RT_Start, Dx_SACT_Start, Dx_Surg, Treatment_Window, Dx_Concurrent_Start, Treatment_Consult_Window
 from sqlalchemy import Enum
 import enum, uuid
 from itertools import chain
@@ -76,6 +76,7 @@ class RuleTarget(enum.Enum):
                 16: (Procedure_Occurrence.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Procedure_Occurrence.person_id.label('measure_resolver')),
                 17: (Measurement.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver')),
                 18: (Treatment_Window.person_id.label('person_id'), Treatment_Window.episode_id.label('episode_id'), Treatment_Window.person_id.label('measure_resolver')),
+                21: (Treatment_Consult_Window.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Treatment_Consult_Window.person_id.label('measure_resolver')),
                 22: (Dx_Concurrent_Start.person_id.label('person_id'), Dx_Concurrent_Start.dx_id.label('episode_id'), Dx_Concurrent_Start.dx_id.label('measure_resolver'))}[self.value]
 
     def target_table(self, ep_override=False):
@@ -105,6 +106,7 @@ class RuleTarget(enum.Enum):
                 16: Procedure_Occurrence.procedure_concept_id,
                 17: Measurement.measurement_concept_id,
                 18: Treatment_Window.treatment_days_before_death,
+                21: Treatment_Consult_Window.initial_gp_referral,
                 22: Dx_Concurrent_Start.dx_id}
 
     def string_target_options(self):
@@ -178,6 +180,7 @@ class RuleTemporality(enum.Enum):
     dt_treat = 12 # this needs to be renamed for sact
     dt_treatment_end = 13
     dt_concurrent = 14
+    dt_consult = 15
     
     def target_date_field(self):
         return {1: Condition_Occurrence.condition_start_date,
@@ -195,7 +198,8 @@ class RuleTemporality(enum.Enum):
                 11: sa.func.coalesce(Dx_Surg.surg_date, Dx_Surg.dx_date), 
                 12: sa.func.coalesce(Dx_SACT_Start.sact_start, Dx_SACT_Start.dx_date),
                 13: Treatment_Window.latest_treatment,
-                14: sa.func.coalesce(Dx_Concurrent_Start.treatment_start, Dx_Concurrent_Start.dx_date)}[self.value]
+                14: sa.func.coalesce(Dx_Concurrent_Start.treatment_start, Dx_Concurrent_Start.dx_date),
+                15: Treatment_Consult_Window.initial_gp_referral}[self.value]
 
 class ReportStatus(enum.Enum):
     st_current = 1
