@@ -56,6 +56,8 @@ class RuleTarget(enum.Enum):
     referral_to_tx_window = 20
     referral_to_specialist_window = 21
     tx_concurrent = 22
+    meas_value_num = 23
+    meas_value_concept = 24
 
     def table_selectables(self):
         # using explicit labels even where not strictly necessary for convenient handling 
@@ -77,7 +79,10 @@ class RuleTarget(enum.Enum):
                 17: (Measurement.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver')),
                 18: (Treatment_Window.person_id.label('person_id'), Treatment_Window.episode_id.label('episode_id'), Treatment_Window.person_id.label('measure_resolver')),
                 21: (Treatment_Consult_Window.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Treatment_Consult_Window.person_id.label('measure_resolver')),
-                22: (Dx_Concurrent_Start.person_id.label('person_id'), Dx_Concurrent_Start.dx_id.label('episode_id'), Dx_Concurrent_Start.dx_id.label('measure_resolver'))}[self.value]
+                22: (Dx_Concurrent_Start.person_id.label('person_id'), Dx_Concurrent_Start.dx_id.label('episode_id'), Dx_Concurrent_Start.dx_id.label('measure_resolver')),
+                23: (Measurement.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver')),
+                24: (Measurement.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver'))}[self.value]
+                
 
     def target_table(self, ep_override=False):
         target_cols = self.table_selectables()
@@ -107,7 +112,9 @@ class RuleTarget(enum.Enum):
                 17: Measurement.measurement_concept_id,
                 18: Treatment_Window.treatment_days_before_death,
                 21: Treatment_Consult_Window.initial_gp_referral,
-                22: Dx_Concurrent_Start.dx_id}
+                22: Dx_Concurrent_Start.dx_id,
+                23: Measurement.value_as_number,
+                24: Measurement.value_as_concept_id}
 
     def string_target_options(self):
         return {1: Condition_Occurrence.condition_code, 
@@ -155,6 +162,7 @@ class RuleType(enum.Enum):
 class ThresholdDirection(enum.Enum):
     gt = 1
     lt = 2
+    eq = 3
     
 class RuleMatcher(enum.Enum):
     substring = 1
@@ -334,6 +342,30 @@ class Indicator(Base):
     in_reports: so.Mapped[List['Report']] = so.relationship(secondary=report_indicator_map,
                                                             back_populates="indicators")
 
+    def __lt__(self, other):
+        # so we can sort
+        if self.indicator_id != other.indicator_id:
+            return self.indicator_id < other.indicator_id
+        return self.indicator_description < other.indicator_description
+
+    def __repr__(self):
+        i = f'({self.id}) {self.indicator_description} - {self.indicator_reference}'
+        n = f'\t{self.numerator_measure}'
+        if self.denominator_measure_id:
+            d = f'\t{self.denominator_measure}'
+        else:
+            d = f'\t(whole report denominator)'
+        return f'{i}\n{n}\n{d}'
+
+
+    def indicator_json(self):
+        return {
+            'indicator_id': self.indicator_id,
+            'indicator_description': self.indicator_description,
+            'benchmark': self.benchmark,
+            'numerator_measure': self.numerator_measure.measure_json(),
+            'denominator_measure': self.denominator_measure.measure_json() if self.denominator_measure_id != 0 else 'full_cohort'
+        }
 
 class Report_Cohort_Map(Base):
     """Class that is used to map between cohorts and reports. 
@@ -579,7 +611,31 @@ class Measure(Base):
             query = sa.select(query.subquery()).filter(sa.column('person_id').in_(people))
         self._members = db.execute(query).all()
         return self._members
+
     
+    def measure_json(self):
+        return {
+            'measure_id': self.measure_id,
+            'measure_name': self.measure_name,
+            'measure_combination': self.measure_combination,
+            'subquery': self.subquery.subquery_json() if self.subquery else None,
+            'children': [c.measure_json() for c in self.children]
+        }
+
+    def __lt__(self, other):
+        if self.measure_id != other.measure_id:
+            return self.measure_id < other.measure_id
+        return self.measure_name < other.measure_name
+
+    def __repr__(self, depth=0):
+        indent = ''.join(['\t']*depth)
+        label = f'{indent}{self.measure_name} ({self.id})'
+        if self.subquery:
+            content = self.subquery.__repr__(depth+1)
+        else:
+            content = '\n'.join([c.__repr__(depth+2) for c in self.children])
+        return f'{label}\n{content}'
+        
     @property
     def members(self):
         return self._members
@@ -718,6 +774,25 @@ class Subquery(Base):
              )
         return dt
 
+    def subquery_json(self):
+        return {
+            'subquery_id': self.subquery_id,
+            'subquery_name': self.subquery_name,
+            'subquery_type': self.subquery_type
+        }
+
+    def __lt__(self, other):
+        if self.subquery_id != other.subquery_id:
+            return self.subquery_id < other.subquery_id
+        return self.subquery_name < other.subquery_name
+
+    def __repr__(self, depth=1):
+        indent = ''.join(['\t']*depth)
+        s = f'{indent}- {self.subquery_name}: {self.subquery_type.name}'
+        indent = f'{indent}\t'
+        q = f'\n{indent}'.join([qr.__repr__() for qr in self.query_rules])
+        return f'{s}\n{indent}{q}'
+
 
 class Dx_Subquery(Subquery):
     # filters cohort based on presence or absence of stated criteria in diagnostic episodes
@@ -836,9 +911,10 @@ class Query_Rule(Base):
     query_concept_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('concept.concept_id'), default=0)
     query_notes: so.Mapped[Optional[str]] = so.mapped_column(sa.String(250), nullable=True)        
     
-    # these two columns are only used by Scalar_Threshold_Rule
+    # these columns are only used by Scalar_Threshold_Rule
     scalar_threshold: so.Mapped[Optional[int]] = so.mapped_column(sa.Integer, nullable=True)
     threshold_direction: so.Mapped[Optional[str]] = so.mapped_column(sa.Enum(ThresholdDirection), nullable=True)
+    threshold_comparator: so.Mapped[Optional[str]] = so.mapped_column(sa.Enum(RuleTarget), nullable=True)
 
     # relationships
     rule_concept: so.Mapped['Concept'] = so.relationship(foreign_keys=[query_concept_id])
@@ -865,6 +941,18 @@ class Query_Rule(Base):
         # and temporal association details, this function will produce the required filter
         # for selecting the target cohort
         raise NotImplementedError('Filter details undefined on base class')
+
+    def __lt__(self, other):
+        if self.query_rule_id != other.query_rule_id:
+            return self.query_rule_id < other.query_rule_id
+        return self.query_concept_id < other.query_concept_id
+
+    def __repr__(self):
+        comparator = f'{self.comparator}'
+        rule_concept = f'{self.rule_concept.concept_id}'
+        if len(comparator) > 20:
+            comparator = f'{rule_concept} - {comparator[:5]}...{comparator[-5:]}'
+        return f'<{self.query_matcher.name}:{comparator}> ({self.rule_concept.concept_name})'
 
 class Exact_Query_Rule(Query_Rule):
         
@@ -929,6 +1017,10 @@ class Substring_Query_Rule(Query_Rule):
 class Absence_Query_Rule(Query_Rule):
 
     __mapper_args__ = { "polymorphic_identity": "absence" }
+    @property
+    def comparator(self):
+        # this can validly be null or 0
+        return self.query_concept_id
 
     def get_filter_details(self, field):
         return field.is_(None)
@@ -936,6 +1028,11 @@ class Absence_Query_Rule(Query_Rule):
 class Presence_Query_Rule(Query_Rule):
     
     __mapper_args__ = { "polymorphic_identity": "presence" }
+
+    @property
+    def comparator(self):
+        # this can validly be null or 0
+        return self.query_concept_id
 
     def get_filter_details(self, field):
         return field.is_not(None)
@@ -947,13 +1044,22 @@ class Scalar_Threshold_Rule(Query_Rule):
     def comparator(self):
         if self.scalar_threshold is None:
             raise RuntimeError(f'Scalar threshold is not set on rule {self.query_rule_id}')
-        return self.scalar_threshold
+        if not self.rule_concept:
+            raise RuntimeError(f'Rule concept {self.query_concept_id} not found')
+        return self.scalar_threshold, self.query_concept_id
+
+    @property
+    def scalar_field(self):
+        return self.threshold_comparator.target()
 
     def get_filter_details(self, field):
+        threshold, concept = self.comparator
         if self.threshold_direction == ThresholdDirection.gt:
-            return field > self.comparator
+            return sa.and_(field==concept, self.scalar_field > threshold)
         elif self.threshold_direction == ThresholdDirection.lt:
-            return field < self.comparator
+            return sa.and_(field==concept, self.scalar_field < threshold)
+        elif self.threshold_direction == ThresholdDirection.eq:
+            return sa.and_(field==concept, self.scalar_field == threshold)
         else:
             raise ValueError(f'Unknown threshold direction: {self.threshold_direction}')
 
