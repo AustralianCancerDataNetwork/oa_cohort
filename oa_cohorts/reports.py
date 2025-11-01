@@ -5,7 +5,13 @@ import sqlalchemy.orm as so
 from omop_alchemy.db import Base
 from omop_alchemy.model.vocabulary import Concept, Concept_Ancestor
 from omop_alchemy.model.clinical import Condition_Occurrence, Person, Observation, Procedure_Occurrence, Measurement
-from omop_alchemy.conventions.constructs import Condition_Episode, Historical_Surgical_Procedure, Dated_Surgical_Procedure, Dx_Treat_Start, Dx_RT_Start, Dx_SACT_Start, Dx_Surg, Treatment_Window, Dx_Concurrent_Start, Treatment_Consult_Window
+from omop_alchemy.conventions.constructs import Condition_Episode, Historical_Surgical_Procedure, Dated_Surgical_Procedure, \
+                                                Dx_Treat_Start, Dx_RT_Start, Dx_SACT_Start, Dx_Surg, Treatment_Window, \
+                                                Dx_Concurrent_Start, EpisodeStage
+
+from omop_alchemy.conventions.constructs.materialized import ModifiedCondition, ModifiedProcedure, OverarchingCondition, \
+                                                             ConditionTreatmentEpisode, create_mat_views, SurgicalProcedure, \
+                                                             SACTRegimen, TreatmentEnvelope, ConsultWindow
 from sqlalchemy import Enum
 import enum, uuid
 from itertools import chain
@@ -58,18 +64,25 @@ class RuleTarget(enum.Enum):
     tx_concurrent = 22
     meas_value_num = 23
     meas_value_concept = 24
+    intent_rt = 25
+    intent_sact = 26
 
     def table_selectables(self):
         # using explicit labels even where not strictly necessary for convenient handling 
-        return {1: (Condition_Episode.person_id.label('person_id'), Condition_Episode.episode_id.label('episode_id'), Condition_Episode.episode_id.label('measure_resolver')), 
-                2: (Condition_Episode.person_id.label('person_id'), Condition_Episode.episode_id.label('episode_id'), Condition_Episode.episode_id.label('measure_resolver')), 
-                3: (Condition_Episode.person_id.label('person_id'), Condition_Episode.episode_id.label('episode_id'), Condition_Episode.episode_id.label('measure_resolver')), 
+        return {1: (OverarchingCondition.person_id.label('person_id'), OverarchingCondition.overarching_episode_id.label('episode_id'), OverarchingCondition.overarching_episode_id.label('measure_resolver')), 
+                2: (OverarchingCondition.person_id.label('person_id'), OverarchingCondition.overarching_episode_id.label('episode_id'), OverarchingCondition.overarching_episode_id.label('measure_resolver')),
+                3: (OverarchingCondition.person_id.label('person_id'), OverarchingCondition.overarching_episode_id.label('episode_id'), OverarchingCondition.overarching_episode_id.label('measure_resolver')), 
                 4: (Condition_Episode.person_id.label('person_id'), Condition_Episode.episode_id.label('episode_id'), Condition_Episode.episode_id.label('measure_resolver')), 
-                5: (Condition_Episode.person_id.label('person_id'), Condition_Episode.episode_id.label('episode_id'), Condition_Episode.episode_id.label('measure_resolver')),
+                #5: (Condition_Episode.person_id.label('person_id'), Condition_Episode.episode_id.label('episode_id'), Condition_Episode.episode_id.label('measure_resolver')),
+                #5: (EpisodeStage.person_id.label('person_id'), EpisodeStage.episode_id.label('episode_id'), EpisodeStage.episode_id.label('measure_resolver')),
+                5: (ModifiedCondition.person_id.label('person_id'), ModifiedCondition.condition_episode.label('episode_id'), ModifiedCondition.condition_episode.label('measure_resolver')),
                 8: (Dx_Treat_Start.person_id.label('person_id'), Dx_Treat_Start.dx_id.label('episode_id'), Dx_Treat_Start.dx_id.label('measure_resolver')),
-                9: (Dx_SACT_Start.person_id.label('person_id'), Dx_SACT_Start.dx_id.label('episode_id'), Dx_SACT_Start.dx_id.label('measure_resolver')),
-                10: (Dx_RT_Start.person_id.label('person_id'), Dx_RT_Start.dx_id.label('episode_id'), Dx_RT_Start.dx_id.label('measure_resolver')),
-                11: (Dx_Surg.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Dx_Surg.person_id.label('measure_resolver')),
+                #9: (Dx_SACT_Start.person_id.label('person_id'), Dx_SACT_Start.dx_id.label('episode_id'), Dx_SACT_Start.dx_id.label('measure_resolver')),
+                #9: (ConditionTreatmentEpisode.person_id.label('person_id'), ConditionTreatmentEpisode.condition_episode_id.label('episode_id'), ConditionTreatmentEpisode.condition_episode_id.label('measure_resolver')),
+                9: (ConditionTreatmentEpisode.person_id.label('person_id'), ConditionTreatmentEpisode.condition_episode_id.label('episode_id'), ConditionTreatmentEpisode.condition_episode_id.label('measure_resolver')),
+                10: (ConditionTreatmentEpisode.person_id.label('person_id'), ConditionTreatmentEpisode.condition_episode_id.label('episode_id'), ConditionTreatmentEpisode.condition_episode_id.label('measure_resolver')),
+                #11: (Dx_Surg.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Dx_Surg.person_id.label('measure_resolver')),
+                11: (SurgicalProcedure.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), SurgicalProcedure.person_id.label('measure_resolver')),
                 #11: (Dated_Surgical_Procedure.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Dated_Surgical_Procedure.person_id.label('measure_resolver')),
                 12: (Person.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
                 13: (Person.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Person.person_id.label('measure_resolver')),
@@ -77,11 +90,13 @@ class RuleTarget(enum.Enum):
                 15: (Observation.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Observation.person_id.label('measure_resolver')),
                 16: (Procedure_Occurrence.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Procedure_Occurrence.person_id.label('measure_resolver')),
                 17: (Measurement.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver')),
-                18: (Treatment_Window.person_id.label('person_id'), Treatment_Window.episode_id.label('episode_id'), Treatment_Window.person_id.label('measure_resolver')),
-                21: (Treatment_Consult_Window.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Treatment_Consult_Window.person_id.label('measure_resolver')),
-                22: (Dx_Concurrent_Start.person_id.label('person_id'), Dx_Concurrent_Start.dx_id.label('episode_id'), Dx_Concurrent_Start.dx_id.label('measure_resolver')),
+                18: (TreatmentEnvelope.person_id.label('person_id'), TreatmentEnvelope.condition_episode.label('episode_id'), TreatmentEnvelope.condition_episode.label('measure_resolver')),
+                21: (ConsultWindow.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), ConsultWindow.person_id.label('measure_resolver')),
+                22: (TreatmentEnvelope.person_id.label('person_id'), TreatmentEnvelope.condition_episode.label('episode_id'), TreatmentEnvelope.condition_episode.label('measure_resolver')),
                 23: (Measurement.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver')),
-                24: (Measurement.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver'))}[self.value]
+                24: (Measurement.person_id.label('person_id'), sa.sql.expression.literal_column('0').label('episode_id'), Measurement.person_id.label('measure_resolver')),
+                25: (ConditionTreatmentEpisode.person_id.label('person_id'), ConditionTreatmentEpisode.condition_episode_id.label('episode_id'), ConditionTreatmentEpisode.condition_episode_id.label('measure_resolver')),
+                26: (ConditionTreatmentEpisode.person_id.label('person_id'), ConditionTreatmentEpisode.condition_episode_id.label('episode_id'), ConditionTreatmentEpisode.condition_episode_id.label('measure_resolver'))}[self.value]
                 
 
     def target_table(self, ep_override=False):
@@ -94,15 +109,15 @@ class RuleTarget(enum.Enum):
 
 
     def target_options(self):
-        return {1: Condition_Episode.condition_concept_id, 
-                2: Condition_Episode.condition_concept_id, 
-                3: Condition_Episode.condition_concept_id, 
+        return {1: OverarchingCondition.condition_concept_id, 
+                2: OverarchingCondition.condition_concept_id, 
+                3: OverarchingCondition.condition_concept_id, 
                 4: Condition_Episode.condition_concept_id, 
-                5: Condition_Episode.modifier_concepts,
+                5: ModifiedCondition.stage_concept_id,
                 8: Dx_Treat_Start.dx_id, #Systemic_Therapy_Episode.episode_id,
-                9: Dx_SACT_Start.dx_id, #Systemic_Therapy_Episode.episode_id, #Chemo_Episode.episode_id,
-                10: Dx_RT_Start.dx_id, #Radiation_Therapy_Episode.episode_id, #Chemo_Episode.episode_id,
-                11: Dx_Surg.surgery_concept_id,
+                9: ConditionTreatmentEpisode.regimen_id, #ConditionTreatmentEpisode.condition_episode_id, #Dx_SACT_Start.dx_id, #Systemic_Therapy_Episode.episode_id, #Chemo_Episode.episode_id,
+                10: ConditionTreatmentEpisode.condition_episode_id, #Radiation_Therapy_Episode.episode_id, #Chemo_Episode.episode_id,
+                11: SurgicalProcedure.surgery_concept_id,
                 #11: Procedure_Occurrence.procedure_concept_id,
                 12: Person.gender_concept_id,
                 13: Person.death_datetime,
@@ -110,18 +125,20 @@ class RuleTarget(enum.Enum):
                 15: Observation.observation_concept_id,
                 16: Procedure_Occurrence.procedure_concept_id,
                 17: Measurement.measurement_concept_id,
-                18: Treatment_Window.treatment_days_before_death,
-                21: Treatment_Consult_Window.initial_gp_referral,
-                22: Dx_Concurrent_Start.dx_id,
+                18: TreatmentEnvelope.treatment_days_before_death,
+                21: ConsultWindow.referral_to_specialist,
+                22: TreatmentEnvelope.concurrent_chemort,
                 23: Measurement.value_as_number,
-                24: Measurement.value_as_concept_id}
+                24: Measurement.value_as_concept_id,
+                25: ConditionTreatmentEpisode.rt_intent_concept_id,
+                26: ConditionTreatmentEpisode.sact_intent_concept_id}
 
     def string_target_options(self):
-        return {1: Condition_Occurrence.condition_code, 
-                2: Condition_Occurrence.condition_code, 
-                3: Condition_Occurrence.condition_code, 
+        return {1: OverarchingCondition.condition_concept, 
+                2: OverarchingCondition.condition_concept, 
+                3: OverarchingCondition.condition_concept, 
                 4: Condition_Occurrence.condition_code, 
-                5: Condition_Occurrence.condition_code,
+               # 5: Condition_Occurrence.condition_code,
                 14: Observation.value_as_concept_id,
                 15: Observation.observation_concept_id,
                 16: Procedure_Occurrence.procedure_concept_id}
@@ -189,9 +206,10 @@ class RuleTemporality(enum.Enum):
     dt_treatment_end = 13
     dt_concurrent = 14
     dt_consult = 15
+    dt_stage = 16
     
     def target_date_field(self):
-        return {1: Condition_Occurrence.condition_start_date,
+        return {1: OverarchingCondition.condition_start_date,
                 2: Person.death_datetime,
                 3: Dx_Treat_Start.treatment_start, 
                 4: Observation.observation_date,
@@ -202,12 +220,14 @@ class RuleTemporality(enum.Enum):
                 8: Historical_Surgical_Procedure.history_datettime,
                 9: Measurement.measurement_date,
                 # coalesce function required here for dates of dx to propagate where query_matcher = absence
-                10: sa.func.coalesce(Dx_RT_Start.rt_start, Dx_RT_Start.dx_date),
-                11: sa.func.coalesce(Dx_Surg.surg_date, Dx_Surg.dx_date), 
-                12: sa.func.coalesce(Dx_SACT_Start.sact_start, Dx_SACT_Start.dx_date),
-                13: Treatment_Window.latest_treatment,
-                14: sa.func.coalesce(Dx_Concurrent_Start.treatment_start, Dx_Concurrent_Start.dx_date),
-                15: Treatment_Consult_Window.initial_gp_referral}[self.value]
+                10: sa.func.coalesce(ConditionTreatmentEpisode.course_start_date, ConditionTreatmentEpisode.condition_start_date),
+                #11: sa.func.coalesce(Dx_Surg.surg_date, Dx_Surg.dx_date), 
+                11: sa.func.coalesce(SurgicalProcedure.surgery_datetime, SurgicalProcedure.condition_start_date), 
+                12: sa.func.coalesce(ConditionTreatmentEpisode.regimen_start_date, ConditionTreatmentEpisode.condition_start_date),
+                13: TreatmentEnvelope.latest_treatment,
+                14: sa.func.coalesce(TreatmentEnvelope.earliest_treatment, TreatmentEnvelope.condition_start_date),
+                15: ConsultWindow.initial_gp_referral,
+                16: ModifiedCondition.stage_date}[self.value]
 
 class ReportStatus(enum.Enum):
     st_current = 1
@@ -295,6 +315,13 @@ class Report(Base):
     def version_string(self):
         if self.report_versions:
             return ';'.join([f'{rv.report_version_major}.{rv.report_version_minor} ({rv.report_version_label})' for rv in self.report_versions])
+
+    def __repr__(self):
+        c = f'===(COHORTS)===\n\t' 
+        cc = '\n\t'.join([c.__repr__() for c in self.cohorts])
+        i = '\n===(INDICATORS)===\n\t'
+        ii = '\n\t'.join([i.__repr__() for i in sorted(self.indicators)])
+        return f'{c}{cc}{i}{ii}'
 
 
 
@@ -393,23 +420,17 @@ class Report_Cohort_Map(Base):
     measures: AssociationProxy[List["Measure"]] = association_proxy("cohort", "measures")
     definition_count: AssociationProxy[int] = association_proxy("cohort", "definition_count")
 
-
-    # @property
-    # def measures(self):
-    #     if self.cohort:
-    #         return [d.dash_cohort_measure for d in self.cohort.definitions]
-
-    # @property
-    # def definition_count(self):
-    #     if self.cohort:
-    #         return self.cohort.definition_count
-    #     return 0
-
     @property
     def measure_count(self):
         if self.cohort:
             return sum([d.measure_count for d in self.cohort.definitions])
         return 0
+
+    def __repr__(self):
+        try:
+            return self.cohort.__repr__()
+        except: 
+            return super().__repr__()
 
 class Dash_Cohort(Base):
     """Top-level class for dash cohorts. 
@@ -456,6 +477,12 @@ class Dash_Cohort(Base):
     @property
     def measure_count(self):
         return len(self.measures)
+
+    def __repr__(self):
+        i = f'({self.id}) {self.dash_cohort_name}\n\t'
+        m = '\n\t'.join([m.__repr__() for m in sorted(self.measures)])
+        return f'{i}{m}'
+
         
 class Dash_Cohort_Def(Base):
     """Conceptually-useful filtering units for end users.
@@ -1054,12 +1081,13 @@ class Scalar_Threshold_Rule(Query_Rule):
 
     def get_filter_details(self, field):
         threshold, concept = self.comparator
+        field_comparator = sa.or_(concept==0, field==concept)
         if self.threshold_direction == ThresholdDirection.gt:
-            return sa.and_(field==concept, self.scalar_field > threshold)
+            return sa.and_(field_comparator, self.scalar_field > threshold)
         elif self.threshold_direction == ThresholdDirection.lt:
-            return sa.and_(field==concept, self.scalar_field < threshold)
+            return sa.and_(field_comparator, self.scalar_field < threshold)
         elif self.threshold_direction == ThresholdDirection.eq:
-            return sa.and_(field==concept, self.scalar_field == threshold)
+            return sa.and_(field_comparator, self.scalar_field == threshold)
         else:
             raise ValueError(f'Unknown threshold direction: {self.threshold_direction}')
 
