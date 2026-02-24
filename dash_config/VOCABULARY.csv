@@ -1,0 +1,61 @@
+vocabulary_id	vocabulary_name	vocabulary_reference	vocabulary_version	vocabulary_concept_id
+ICD10CM	International Classification of Diseases, Tenth Revision, Clinical Modification (NCHS)	https://www.cdc.gov/nchs/icd/icd-10-cm.htm	ICD10CM FY2025 code descriptions	44819098
+ICD9CM	International Classification of Diseases, Ninth Revision, Clinical Modification, Volume 1 and 2 (NCHS)	http://www.cms.gov/Medicare/Coding/ICD9ProviderDiagnosticCodes/codes.html	ICD9CM v32 master descriptions	5046
+NDC	National Drug Code (FDA and manufacturers)	http://www.nlm.nih.gov/research/umls/rxnorm/docs/rxnormfiles.html, http://www.fda.gov/downloads/Drugs/DevelopmentApprovalProcess/UCM070838.zip	NDC 20240825	44819105
+Visit Type	OMOP Visit Type	OMOP generated		44819150
+Drug Type	OMOP Drug Exposure Type	OMOP generated		44819126
+Plan	OMOP Health Plan	OMOP generated		32471
+Procedure Type	OMOP Procedure Occurrence Type	OMOP generated		44819128
+LOINC	Logical Observation Identifiers Names and Codes (Regenstrief Institute)	http://loinc.org/downloads/loinc	LOINC 2.77	44819102
+ICD9Proc	International Classification of Diseases, Ninth Revision, Clinical Modification, Volume 3 (NCHS)	http://www.cms.gov/Medicare/Coding/ICD9ProviderDiagnosticCodes/codes.html	ICD9CM v32 master descriptions	44819099
+US Census	Census regions of the United States (USCB)	https://www.census.gov/geo/maps-data/data/tiger-cart-boundary.html	US Census 2017 Release	32570
+Episode	OMOP Episode	OMOP generated	Episode 20201014	32523
+Metadata	OMOP Metadata	OMOP generated		32675
+Observation Type	OMOP Observation Type	OMOP generated		44819129
+Condition Type	OMOP Condition Occurrence Type	OMOP generated		44819127
+Meas Type	OMOP Measurement Type	OMOP generated		44819152
+Condition Status	OMOP Condition Status	OMOP generated		32887
+None	OMOP Standardized Vocabularies	OMOP generated	v5.0 30-AUG-24	44819096
+Obs Period Type	OMOP Observation Period Type	OMOP generated		44819149
+Ethnicity	OMOP Ethnicity	OMOP generated		44819134
+Race	Race and Ethnicity Code Set (USBC)	http://www.cdc.gov/nchs/data/dvs/Race_Ethnicity_CodeSet.pdf	Version 1.0	44819109
+Visit	OMOP Visit	OMOP generated	Visit 20211216	44819119
+Cost Type	OMOP Cost Type	OMOP generated		5029
+Sponsor	OMOP Sponsor	OMOP generated		32472
+Plan Stop Reason	OMOP Plan Stop Reason	OMOP generated		32474
+Device Type	OMOP Device Type	OMOP generated		44819151
+SOPT	Source of Payment Typology (PHDSC)	https://www.nahdo.org/sopt	SOPT Version 9.2	32473
+OncoTree	OncoTree (MSK)	http://oncotree.mskcc.org/	OncoTree version 2021-11-02	33008
+UB04 Typ bill	UB04 Type of Bill - Institutional (USHIK)	https://ushik.ahrq.gov/ViewItemDetails?&system=apcd&itemKey=196987000		32044
+Provider	OMOP Provider	OMOP generated		32573
+Gender	OMOP Gender	OMOP generated		44819108
+Cohort Type	OMOP Cohort Type	OMOP generated		44819234
+Episode Type	OMOP Episode Type	OMOP generated		32542
+Death Type	OMOP Death Type	OMOP generated		44819135
+Note Type	OMOP Note Type	OMOP generated		44819146
+RxNorm Extension	OMOP RxNorm Extension	OMOP generated	RxNorm Extension 20240701	252
+Cost	OMOP Cost	OMOP generated		581457
+HemOnc	HemOnc	https://hemonc.org	HemOnc 2022-11-29	32613
+Supplier	OMOP Supplier	OMOP generated		32574
+OSM	OpenStreetMap (OSMF)	https://www.openstreetmap.org/copyright/en, https://wambachers-osm.website/boundaries/	OSM Release 2019-02-21	32541
+UB04 Point of Origin	UB04 Claim Source Inpatient Admission Code (CMS)	https://www.resdac.org/cms-data/variables/Claim-Source-Inpatient-Admission-Code		32045
+UB04 Pt dis status	UB04 Patient Discharge Status Code (CMS)	https://www.resdac.org/cms-data/variables/patient-discharge-status-code		32047
+Korean Revenue Code	Korean Revenue Code (KNHIS)	OMOP generated		32724
+UB04 Pri Typ of Adm	UB04 Claim Inpatient Admission Type Code (CMS)	https://www.resdac.org/cms-data/variables/Claim-Inpatient-Admission-Type-Code		32046
+ICDO3	International Classification of Diseases for Oncology, Third Edition (WHO)	https://seer.cancer.gov/icd-o-3/	ICDO3 SEER Site/Histology Released 06/2020	581426
+Cancer Modifier	Diagnostic Modifiers of Cancer (OMOP)	OMOP generated	Cancer Modifier 20220909	32929
+Relationship	OMOP Relationship	OMOP generated		44819235
+Domain	OMOP Domain	OMOP generated		44819147
+OncoKB	Oncology Knowledge Base (MSK)	https://www.oncokb.org/	OncoKB v20210502	32999
+RxNorm	RxNorm (NLM)	http://www.nlm.nih.gov/research/umls/rxnorm/docs/rxnormfiles.html	RxNorm 20240506	44819104
+Language	OMOP Language	OMOP generated	Language 20221030	33069
+CPT4	Current Procedural Terminology version 4 (AMA)	http://www.nlm.nih.gov/research/umls/licensedcontent/umlsknowledgesources.html	2024 Release	44819100
+CDM	OMOP Common DataModel	https://github.com/OHDSI/CommonDataModel	CDM v6.0.0	32485
+NAACCR	Data Standards & Data Dictionary Volume II (NAACCR)	http://datadictionary.naaccr.org/?c=10	NAACCR v18	32642
+Vocabulary	OMOP Vocabulary	OMOP generated		44819232
+Type Concept	OMOP Type Concept	OMOP generated	Type Concept 20221030	32808
+ICD10	International Classification of Diseases, Tenth Revision (WHO)	http://www.who.int/classifications/icd/icdonlineversions/en/	2021 Release	44819124
+Concept Class	OMOP Concept Class	OMOP generated		44819233
+UCUM	Unified Code for Units of Measure (Regenstrief Institute)	http://aurora.regenstrief.org/~ucum/ucum.html#section-Alphabetic-Index	Version 1.8.2	44819107
+SNOMED	Systematic Nomenclature of Medicine - Clinical Terms (IHTSDO)	http://www.nlm.nih.gov/research/umls/licensedcontent/umlsknowledgesources.html	2024-02-01 SNOMED CT International Edition; 2024-03-01 SNOMED CT US Edition; 2024-04-10 SNOMED CT UK Edition	44819097
+OMOP Extension	OMOP Extension (OHDSI)	OMOP generated	OMOP Extension 20240716	32758

@@ -1,0 +1,18 @@
+dash_cohort_def_id,dash_cohort_def_name,dash_cohort_def_short_name,measure_id
+2,Mesothelioma,mesothelioma,56
+3,Mets to lung,lung_mets,57
+4,Oral Cavity,oral,58
+5,Oropharynx,oropharynx,59
+6,Nasopharynx,nasopharynx,60
+7,Hypopharynx,hypopharynx,61
+8,Larynx,larynx,62
+9,Nasal cavity and middle ear,nasal,63
+10,Other head and neck / ill-defined,other_hnc,64
+11,Small intestine,small_intestine,65
+12,Colon,colon,66
+13,Rectosigmoid junction,rectosigmoid,67
+14,Rectum,rectum,68
+15,Anus and anal canal,anal,69
+1,Lung Cancer,lung_cancer,71
+16,Head and Neck all,hn_all,72
+17,Colorectal all,crc_all,80
