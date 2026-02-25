@@ -228,3 +228,5 @@ poetry.lock
 .env
 oa_system_config.yaml
 *__pycache__*
+
+*old*
