@@ -5,14 +5,16 @@ from sqlalchemy.ext.associationproxy import association_proxy
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from itertools import chain
-from typing import Sequence, Tuple, Any, TYPE_CHECKING
+from typing import Sequence, Any, TYPE_CHECKING
 from ..core.utils import HTMLRenderable, RawHTML
 
 if TYPE_CHECKING:
     from .measure import Measure
     from .report import ReportCohortMap
 
-Row = Tuple[Any, ...]
+from sqlalchemy.engine import Row as SARow
+
+Row = SARow[Any]
 
 """Association table for n-m mapping between dash_cohort and dash_cohort_def"""
 dash_cohort_def_map = sa.Table(

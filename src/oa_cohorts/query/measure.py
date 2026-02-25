@@ -9,7 +9,10 @@ from ..measurables import get_measurable_registry, MeasurableBase
 from ..core.utils import HTMLRenderable, RawHTML, table, td, esc, HTMLChild, sql_block
 
 from sqlalchemy.sql import Select, CompoundSelect
-from typing import TypeAlias, Optional
+from typing import TypeAlias, Optional, Sequence, Any, cast, ClassVar
+
+from sqlalchemy.engine import Row as SARow
+Row = SARow[Any]
 
 SQLQuery: TypeAlias = Select | CompoundSelect
 
@@ -21,7 +24,7 @@ COMBINATION_SQL = {
 
 class Measure(HTMLRenderable, Base):
     __tablename__ = "measure"
-
+    __allow_unmapped__ = True 
     measure_id: so.Mapped[int] = so.mapped_column(primary_key=True)
     id = so.synonym("measure_id")
 
@@ -45,10 +48,23 @@ class Measure(HTMLRenderable, Base):
         lazy="selectin",
     )
 
+    _members: Sequence[Row]
+
+    @so.reconstructor
+    def init_on_load(self) -> None:
+        self._members = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.init_on_load()
+
+    @property
+    def members(self) -> Sequence[Row]:
+        return self._members
+
     @property
     def children(self) -> list["Measure"]:
         return [rel.child for rel in self.child_links]
-
     
     def __repr__(self) -> str:
         header = f"<Measure {self.name!r} op={self.combination.value}>"
@@ -70,6 +86,17 @@ class Measure(HTMLRenderable, Base):
         return f"Measure: {self.name}"
 
     def _html_header(self) -> dict[str, object]:
+        if self.measure_id == 0:
+            return {
+                "ID": self.measure_id,
+                "Name": self.name,
+                "Combination": RawHTML(
+                    f"<span class='badge neutral'>FULL COHORT</span>"
+                ),
+                "Subquery": RawHTML("<i>Report cohort (no filtering)</i>"),
+                "Children": len(self.children),
+                "Episode override": "n/a",
+            }
         return {
             "ID": self.measure_id,
             "Name": self.name,
@@ -84,6 +111,16 @@ class Measure(HTMLRenderable, Base):
 
     def _html_inner(self):
         blocks: list[HTMLChild] = []
+
+        if self.measure_id == 0:
+            blocks.append(
+                RawHTML(
+                    "<div class='muted'>"
+                    "<i>This measure represents the full report cohort (no filtering applied).</i>"
+                    "</div>"
+                )
+            )
+            return blocks
 
         # Subquery (leaf)
         if self.subquery:
@@ -214,7 +251,7 @@ class MeasureSQLCompiler:
         return combiner(*parts)
 
     def sql_any(self, *, ep_override: bool = False) -> SQLQuery:
-        if not self.measure.children:
+        if self.measure.subquery is None and not self.measure.children:
             raise ValueError(f"Measure {self.measure.measure_id} has no subquery and no children")
         ep_override = ep_override or self.measure.person_ep_override
 
@@ -230,7 +267,7 @@ class MeasureSQLCompiler:
         return self.sql_first(ep_override=ep_override)
 
     def sql_undated(self, *, ep_override: bool = False) -> SQLQuery:
-        if not self.measure.children:
+        if self.measure.subquery is None and not self.measure.children:
             raise ValueError(f"Measure {self.measure.measure_id} has no subquery and no children")
         ep_override = ep_override or self.measure.person_ep_override
 
@@ -241,7 +278,7 @@ class MeasureSQLCompiler:
         return self._combine([c.sql_undated(ep_override=ep_override) for c in children])
 
     def sql_first(self, *, ep_override: bool = False) -> SQLQuery:
-        if not self.measure.children:
+        if self.measure.subquery is None and not self.measure.children:
             raise ValueError(f"Measure {self.measure.measure_id} has no subquery and no children")
         ep_override = ep_override or self.measure.person_ep_override
 
@@ -268,11 +305,20 @@ class MeasureSQLCompiler:
 class MeasureExecutor:
     def __init__(self, db):
         self.db = db
-        self._cache: dict[int, list[tuple]] = {}
+        self._cache: dict[int, Sequence[Row]] = {}
 
-    def execute(self, measure: Measure, *, ep_override: bool = False, people: list[int] | None = None):
-        if measure.measure_id in self._cache:
-            return self._cache[measure.measure_id]
+    def execute(
+        self,
+        measure: Measure,
+        *,
+        ep_override: bool = False,
+        people: list[int] | None = None,
+        force_refresh: bool = False,
+    ) -> Sequence[Row]:
+        if not force_refresh and measure.measure_id in self._cache:
+            rows = self._cache[measure.measure_id]
+            measure._members = rows
+            return rows
 
         sql = MeasureSQLCompiler(measure).sql_any(ep_override=ep_override)
 
@@ -281,5 +327,7 @@ class MeasureExecutor:
             sql = sa.select(sq).where(sq.c.person_id.in_(people))
 
         rows = self.db.execute(sql).all()
-        self._cache[measure.measure_id] = rows
-        return rows
+        rows_typed = cast(Sequence[Row], rows)
+        self._cache[measure.measure_id] = rows_typed
+        measure._members = rows_typed
+        return rows_typed
