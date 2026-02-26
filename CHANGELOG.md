@@ -12,3 +12,6 @@
 
 ## 0.2.0
 - centralised execution functions and upversion to beta status
+
+## 0.2.1
+- introduced special handling for measure 0

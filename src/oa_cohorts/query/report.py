@@ -146,7 +146,14 @@ class Report(HTMLRenderable, Base):
 
         executor = MeasureExecutor(db)
         for m in self.report_measures:
+            if m.measure_id == 0:
+                continue
             executor.execute(m, people=people)
+
+        cohort_members = self.members
+        for m in self.report_measures:
+            if m.measure_id == 0:
+                m._members = cohort_members
 
     @hybrid_property
     def version_string(self):

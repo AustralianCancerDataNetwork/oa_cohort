@@ -356,6 +356,11 @@ class MeasureExecutor:
         people: list[int] | None = None,
         force_refresh: bool = False,
     ) -> Sequence[Row]:
+        if measure.measure_id == 0:
+            raise RuntimeError(
+                "Measure ID = 0 represents FULL COHORT and must be resolved at the Report level. "
+                "Call Report.execute() instead."
+            )
         if not force_refresh and measure.measure_id in self._cache:
             rows = self._cache[measure.measure_id]
             measure._members = rows
