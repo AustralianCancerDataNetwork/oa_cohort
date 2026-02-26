@@ -1,4 +1,4 @@
-#OA Cohorts – Reporting & Cohort Execution Engine
+# OA Cohorts – Reporting & Cohort Execution Engine
 
 This package provides the core machinery for defining, executing, and inspecting cohort-based reports over OMOP-style clinical data. It’s designed to support building real-world evidence reports from composable clinical rules, measures, cohorts, and indicators, with both programmatic APIs and lightweight HTML rendering for debugging and exploration.
 
