@@ -12,6 +12,8 @@ class MeasurementMeasurable(DxMeasurementMV, MeasurableBase, Base):
         episode_id_attr="episode_id",
         event_date_attr="event_date",
         value_concept_attr="event_concept_id",
+        value_string_attr="event_label",
+        value_numeric_attr="value_as_number"
     )
 
 class ProcedureMeasurable(DxProcedureMV, MeasurableBase, Base):
@@ -22,6 +24,7 @@ class ProcedureMeasurable(DxProcedureMV, MeasurableBase, Base):
         episode_id_attr="episode_id",
         event_date_attr="event_date",
         value_concept_attr="event_concept_id",
+        value_string_attr="event_label",
     )
 
 class ObserveMeasurable(DxObservationMV, MeasurableBase, Base):
@@ -32,4 +35,6 @@ class ObserveMeasurable(DxObservationMV, MeasurableBase, Base):
         episode_id_attr="episode_id",
         event_date_attr="event_date",
         value_concept_attr="event_concept_id",
+        value_string_attr="event_label",
+        value_numeric_attr="value_as_number"
     )

@@ -54,16 +54,22 @@ class Subquery(HTMLRenderable, Base):
         Choose concept vs numeric value column depending on rule types.
         """
         use_numeric = any(r.requires_numeric for r in self.rules)
+        use_string = any(r.requires_string for r in self.rules) 
+        specs = measurable.__bound_measurable__
 
-        col = (
-            measurable.__bound_measurable__.value_numeric_col
-            if use_numeric
-            else measurable.__bound_measurable__.value_concept_col
-        )
+        if use_numeric:
+            col = specs.value_numeric_col
+            kind = "numeric"
+        elif use_string:
+            col = specs.value_string_col
+            kind = "string"
+        else:
+            col = specs.value_concept_col
+            kind = "concept"
 
         if col is None:
             raise ValueError(
-                f"{measurable.__name__} does not expose required value column "
+                f"{measurable.__name__} does not expose required {kind} value column "
                 f"for subquery {self.subquery_id}"
             )
 

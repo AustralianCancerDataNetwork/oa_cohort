@@ -27,6 +27,7 @@ class MeasurableSpec:
 
     value_numeric_attr: Optional[str] = None
     value_concept_attr: Optional[str] = None
+    value_string_attr: Optional[str] = None 
 
     temporality_map: Mapping[RuleTemporality, str] | None = None
     valid_targets: set[RuleTarget] | None = None
@@ -40,6 +41,7 @@ class MeasurableSpec:
             event_date_col=getattr(cls, self.event_date_attr),
             value_numeric_col=getattr(cls, self.value_numeric_attr) if self.value_numeric_attr else None,
             value_concept_col=getattr(cls, self.value_concept_attr) if self.value_concept_attr else None,
+            value_string_col=getattr(cls, self.value_string_attr) if self.value_string_attr else None,
             temporality_map={
                 k: getattr(cls, v)
                 for k, v in (self.temporality_map or {}).items()
@@ -58,6 +60,7 @@ class BoundMeasurableSpec:
 
     value_numeric_col: Optional[sa.Column] = None
     value_concept_col: Optional[sa.Column] = None
+    value_string_col: Optional[sa.Column] = None 
 
     temporality_map: Mapping[RuleTemporality, sa.Column] | None = None
     valid_targets: set[RuleTarget] | None = None

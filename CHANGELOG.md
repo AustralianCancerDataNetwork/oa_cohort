@@ -6,3 +6,6 @@
 
 ## 0.1.3
 - treatment measurables
+
+## 0.1.4
+- string matcher attributes

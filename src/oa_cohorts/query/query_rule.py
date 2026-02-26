@@ -39,6 +39,10 @@ class QueryRule(Base, HTMLRenderable):
     def requires_numeric(self) -> bool:
         return self.matcher == RuleMatcher.scalar
 
+    @property
+    def requires_string(self) -> bool:
+        return self.matcher == RuleMatcher.substring
+
     def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
         raise NotImplementedError("get_filter_details must be implemented on subclasses")
     
