@@ -4,7 +4,7 @@ from itertools import chain
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from sqlalchemy.ext.hybrid import hybrid_property
-from orm_loader.helpers import Base
+from orm_loader.helpers import Base, get_logger
 from sqlalchemy.ext.associationproxy import association_proxy
 from ..core.utils import HTMLRenderable, RawHTML, esc, td, th, exec_badge, table
 from ..core import ReportStatus
@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .indicator import Indicator
     from .dash_cohort import DashCohort
+
+logger = get_logger(__name__)
 
 report_indicator_map = sa.Table(
     'report_indicator_map',
@@ -138,7 +140,7 @@ class Report(HTMLRenderable, Base):
     def members(self):
         return list(set(chain.from_iterable([c.members for c in self.report_cohorts])))
 
-    def execute(self, db: so.Session, *, people: list[int] | None = None):
+    def execute(self, db: so.Session, *, people: list[int] | None = None, strict: bool = True):
         """
         Execute all measures required by this report.
         """
@@ -148,7 +150,13 @@ class Report(HTMLRenderable, Base):
         for m in self.report_measures:
             if m.measure_id == 0:
                 continue
-            executor.execute(m, people=people)
+            try:
+                logger.info(f"Executing measure {m.name} (ID {m.measure_id}) for report {self.report_short_name}")
+                executor.execute(m, people=people)
+            except Exception as e:
+                logger.error(f"Error executing measure {m.name} (ID {m.measure_id}): {e}")
+                if strict:
+                    raise
 
         cohort_members = self.members
         for m in self.report_measures:
