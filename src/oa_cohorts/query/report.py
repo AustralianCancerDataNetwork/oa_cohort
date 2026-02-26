@@ -133,10 +133,20 @@ class Report(HTMLRenderable, Base):
             set(self.numerator_measures + self.denominator_measures + self.cohort_measures),
             key=lambda x: x.id,
         )
-
+    
     @property
     def members(self):
         return list(set(chain.from_iterable([c.members for c in self.report_cohorts])))
+
+    def execute(self, db: so.Session, *, people: list[int] | None = None):
+        """
+        Execute all measures required by this report.
+        """
+        from .measure import MeasureExecutor
+
+        executor = MeasureExecutor(db)
+        for m in self.report_measures:
+            executor.execute(m, people=people)
 
     @hybrid_property
     def version_string(self):

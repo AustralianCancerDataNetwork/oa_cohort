@@ -100,6 +100,9 @@ class MeasurableBase:
             return tm[temporality]
         return cls.event_date_col()
     
+    # TODO: confirm removal of episode override logic in favour of 
+    # linking all events to episodes at the data level through MVs
+    # and remove ep_override args from all methods
     @classmethod
     def table_selectables(cls, ep_override: bool = False):
         return (

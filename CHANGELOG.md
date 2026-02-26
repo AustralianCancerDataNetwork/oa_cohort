@@ -9,3 +9,6 @@
 
 ## 0.1.4
 - string matcher attributes
+
+## 0.2.0
+- centralised execution functions and upversion to beta status

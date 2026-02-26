@@ -47,31 +47,15 @@ class DashCohortDef(HTMLRenderable, Base):
         lazy="joined",
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.init_on_load()
-
-    @so.reconstructor
-    def init_on_load(self):
-        self._members: Sequence[Row] = []
-
     @property
     def members(self) -> Sequence[Row]:
-        return self._members
-
-    def execute_cohort(self, db, *, ep_override: bool = False, people: list[int] | None = None):
+        """
+        Members of a cohort definition are exactly the members of its backing measure.
+        Assumes the measure has already been executed.
+        """
         if not self.dash_cohort_measure:
-            self._members = []
-            return
-        
-        from .measure import MeasureExecutor
-
-        executor = MeasureExecutor(db)
-        self._members = executor.execute(
-            self.dash_cohort_measure,
-            ep_override=ep_override,
-            people=people,
-        )
+            return ()
+        return self.dash_cohort_measure.members
 
     def get_cohort(self):
         return self.dash_cohort_measure
@@ -158,8 +142,17 @@ class DashCohort(HTMLRenderable, Base):
 
     @property
     def members(self) -> Sequence[Row]:
-        return list(set(chain.from_iterable(d.members for d in self.definitions)))
+        seen = set()
+        out: list[Row] = []
 
+        for d in self.definitions:
+            for row in d.members:
+                if row not in seen:
+                    seen.add(row)
+                    out.append(row)
+
+        return out
+    
     @property
     def definition_count(self):
         return len(self.definitions)
@@ -167,6 +160,17 @@ class DashCohort(HTMLRenderable, Base):
     @property
     def measure_count(self):
         return len(self.measures)
+    
+    def execute(self, db: so.Session, *, people: list[int] | None = None):
+        from .measure import MeasureExecutor
+
+        executor = MeasureExecutor(db)
+        for d in self.definitions:
+            if d.dash_cohort_measure:
+                executor.execute(
+                    d.dash_cohort_measure,
+                    people=people,
+                )
 
     def __repr__(self):
         return f"<DashCohort {self.dash_cohort_name!r} defs={len(self.definitions)}>"

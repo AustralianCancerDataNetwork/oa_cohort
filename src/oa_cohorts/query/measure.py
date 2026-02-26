@@ -1,25 +1,13 @@
 from __future__ import annotations
 import sqlalchemy as sa
 import sqlalchemy.orm as so
-from sqlalchemy.sql import Select, CompoundSelect
-from sqlalchemy.engine import Row as SARow
-from typing import TypeAlias, Optional, Sequence, Any, cast, Callable
-
+from typing import Optional, Sequence, cast, Callable
 from orm_loader.helpers import Base
+from .typing import Row, SQLQuery, COMBINATION_SQL
 from .subquery import Subquery
 from ..core.executability import MeasureExecCheck, ExecStatus
 from ..core import RuleCombination
 from ..core.utils import HTMLRenderable, RawHTML, table, td, esc, HTMLChild, sql_block
-Row = SARow[Any]
-
-SQLQuery: TypeAlias = Select | CompoundSelect
-
-COMBINATION_SQL = {
-    RuleCombination.rule_or: sa.union_all,
-    RuleCombination.rule_and: sa.intersect_all,
-    RuleCombination.rule_except: sa.except_all,
-}
-
 
 class Measure(HTMLRenderable, Base):
     __tablename__ = "measure"
@@ -47,18 +35,23 @@ class Measure(HTMLRenderable, Base):
         lazy="selectin",
     )
 
-    _members: Sequence[Row]
+    _members: Sequence[Row] | None = None
 
-    @so.reconstructor
-    def init_on_load(self) -> None:
-        self._members = ()
+    # @so.reconstructor
+    # def init_on_load(self) -> None:
+    #     self._members = ()
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.init_on_load()
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     self.init_on_load()
 
     @property
     def members(self) -> Sequence[Row]:
+        if self._members is None:
+            raise RuntimeError(
+                f"Measure {self.measure_id} ('{self.name}') has not been executed yet. "
+                "Call MeasureExecutor.execute(measure) before accessing members."
+            )
         return self._members
 
     @property

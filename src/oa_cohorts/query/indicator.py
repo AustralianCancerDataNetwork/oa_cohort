@@ -1,11 +1,13 @@
 from __future__ import annotations
 import sqlalchemy as sa
 import sqlalchemy.orm as so
+from typing import Sequence
 from orm_loader.helpers import Base
 from ..core import RuleTemporality
 from ..core.utils import HTMLRenderable, RawHTML, esc
 from .report import Report, report_indicator_map
 from .measure import Measure
+from .typing import Row
 from ..core.executability import ExecStatus, IndicatorExecCheck
 
 class Indicator(HTMLRenderable, Base):
@@ -45,6 +47,45 @@ class Indicator(HTMLRenderable, Base):
         secondary=report_indicator_map,
         back_populates="indicators"
     )
+
+    def execute(self, db: so.Session, *, people: list[int] | None = None):
+        """
+        Execute both numerator and denominator measures for this indicator.
+        """
+        from .measure import MeasureExecutor
+
+        executor = MeasureExecutor(db)
+
+        executor.execute(
+            self.denominator_measure,
+            people=people,
+        )
+        
+        executor.execute(
+            self.numerator_measure,
+            people=people,
+        )
+
+    @property
+    def numerator_members(self) -> Sequence[Row]:
+        """
+        Members of the numerator cohort (delegates to numerator measure).
+        Returns only those members who are also in the denominator cohort, as per indicator definition
+        (i.e. I do not care about the numerator event for members not in the denominator).
+        
+        Assumes the numerator measure has been executed.
+        """
+        num = set(self.numerator_measure.members)
+        den = set(self.denominator_measure.members)
+        return list(num & den)
+
+    @property
+    def denominator_members(self) -> Sequence[Row]:
+        """
+        Members of the denominator cohort (delegates to denominator measure).
+        Assumes the denominator measure has been executed.
+        """
+        return self.denominator_measure.members
 
     def __lt__(self, other):
         if self.indicator_id != other.indicator_id:
