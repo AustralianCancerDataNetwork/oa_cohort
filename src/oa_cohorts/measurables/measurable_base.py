@@ -15,6 +15,7 @@ class MeasurableDomain(str, enum.Enum):
     meas = "meas"
     obs = "obs"
     proc = "proc"
+    person = "person"
 
 @dataclass(frozen=True)
 class MeasurableSpec:

@@ -24,6 +24,10 @@ def get_measurable_registry() -> dict[RuleTarget, Type[MeasurableBase]]:
         ObserveMeasurable
     )
 
+    from .pr_measurables import (
+        DeathMeasurable
+    )
+
     return {
         RuleTarget.dx_any: AnyConditionMeasurable,
         RuleTarget.dx_primary: AnyConditionMeasurable,
@@ -38,6 +42,7 @@ def get_measurable_registry() -> dict[RuleTarget, Type[MeasurableBase]]:
         RuleTarget.tx_radiotherapy: RTTreatmentMeasurable,
         RuleTarget.intent_sact: IntentChemoMeasurable,
         RuleTarget.intent_rt: IntentRTMeasurable,
+        RuleTarget.demog_death: DeathMeasurable
     }
 
 

@@ -287,9 +287,27 @@ class MeasureSQLCompiler:
     def __init__(self, measure: Measure):
         self.measure = measure
 
-    def _combine(self, parts: list[SQLQuery]) -> SQLQuery:
+    def _combine(self, parts: Sequence[SQLQuery]) -> SQLQuery:
         combiner = COMBINATION_SQL[self.measure.combination]
         return combiner(*parts)
+    
+    def _normalise(self, q: SQLQuery) -> sa.Subquery:
+        sq = q.subquery()
+
+        required = {"person_id", "episode_id", "measure_resolver", "measure_date"}
+        missing = required - set(sq.c.keys())
+
+        if missing:
+            raise ValueError(
+                f"Normalisation failed: query is missing columns {missing}. "
+                f"Available columns: {list(sq.c.keys())}"
+            )
+        return sa.select(
+            sq.c.person_id.label("person_id"),
+            sq.c.episode_id.label("episode_id"),
+            sq.c.measure_resolver.label("measure_resolver"),
+            sq.c.measure_date.label("measure_date")
+        ).subquery()
 
     def sql_any(self, *, ep_override: bool = False) -> SQLQuery:
         if self.measure.subquery is None and not self.measure.children:
@@ -302,8 +320,9 @@ class MeasureSQLCompiler:
         children = [MeasureSQLCompiler(c) for c in self.measure.children]
 
         if self.measure.combination is RuleCombination.rule_or:
-            return self._combine([c.sql_any(ep_override=ep_override) for c in children])
-        
+            #return self._combine([c.sql_any(ep_override=ep_override) for c in children])
+            parts = [self._normalise(c.sql_any(ep_override=ep_override)).select() for c in children]
+            return self._combine(parts)
         # AND / EXCEPT collapse to FIRST logic
         return self.sql_first(ep_override=ep_override)
 
@@ -325,21 +344,31 @@ class MeasureSQLCompiler:
 
         if self.measure.subquery:
             return self.measure.subquery.get_subquery_first(ep_override=ep_override)
-
+        
         children = [MeasureSQLCompiler(c) for c in self.measure.children]
-        earliest = [c.sql_any(ep_override=ep_override).subquery() for c in children]
+        earliest = [
+            self._normalise(c.sql_any(ep_override=ep_override))
+            for c in children
+        ]        
 
-        lhs = earliest[0]
+        # earliest = [c.sql_any(ep_override=ep_override).subquery() for c in children]
+        start = earliest[0]
+        lhs = start
+        date_cols = [start.c.measure_date]
+
         date_cols = [lhs.c.measure_date]
 
         for rhs in earliest[1:]:
-            lhs = lhs.join(rhs, lhs.c.measure_resolver == rhs.c.measure_resolver)
+            lhs = lhs.join(
+                rhs,
+                start.c.measure_resolver == rhs.c.measure_resolver
+            )
             date_cols.append(rhs.c.measure_date)
 
         return sa.select(
-            lhs.c.person_id,
-            lhs.c.episode_id,
-            lhs.c.measure_resolver,
+            start.c.person_id,
+            start.c.episode_id,
+            start.c.measure_resolver,
             sa.func.greatest(*date_cols).label("measure_date"),
         ).select_from(lhs)
     

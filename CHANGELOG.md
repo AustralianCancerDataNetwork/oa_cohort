@@ -18,3 +18,7 @@
 
 ## 0.2.2
 - added lenient execution mode
+
+## 0.2.3
+- added death measure
+- fixed sql resolution for any/earliest
