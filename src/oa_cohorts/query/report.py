@@ -6,14 +6,14 @@ import sqlalchemy.orm as so
 from sqlalchemy.ext.hybrid import hybrid_property
 from orm_loader.helpers import Base
 from sqlalchemy.ext.associationproxy import association_proxy
-from ..core.utils import HTMLRenderable, RawHTML, esc
+from ..core.utils import HTMLRenderable, RawHTML, esc, td, th, exec_badge, table
 from ..core import ReportStatus
+from ..core.executability import ExecStatus
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .indicator import Indicator
     from .dash_cohort import DashCohort
-
 
 report_indicator_map = sa.Table(
     'report_indicator_map',
@@ -82,7 +82,7 @@ class ReportCohortMap(HTMLRenderable, Base):
         blocks.append(self.cohort)
 
         return blocks
-
+    
 class Report(HTMLRenderable, Base):
     """Primary report class that holds the full report definition."""
     __tablename__ = 'report'
@@ -176,7 +176,9 @@ class Report(HTMLRenderable, Base):
         # Description
         if self.report_description:
             blocks.append(RawHTML(f"<div class='muted'>{esc(self.report_description)}</div>"))
-
+        
+        blocks.extend(self._html_exec_summary())
+        
         # Indicators
         blocks.append(RawHTML("<div class='subquery-section-title'>Indicators</div>"))
         if self.indicators:
@@ -185,6 +187,124 @@ class Report(HTMLRenderable, Base):
             blocks.append(RawHTML("<div class='muted'><i>No indicators</i></div>"))
 
         return blocks
+    
+    def executable_status(self) -> ExecStatus:
+        statuses: list[ExecStatus] = []
+
+        # Indicator-level statuses
+        for ind in self.indicators:
+            statuses.append(ind.is_executable().status)
+
+        # Dash cohort definition statuses
+        for rc in self.cohorts:
+            cohort = rc.cohort
+            if not cohort:
+                continue
+            for d in cohort.definitions:
+                statuses.append(d.is_executable().status)
+
+        if ExecStatus.FAIL in statuses:
+            return ExecStatus.FAIL
+        if ExecStatus.WARN in statuses:
+            return ExecStatus.WARN
+        return ExecStatus.PASS
+    
+
+    def _html_exec_summary(self):
+        blocks: list[object] = []
+
+        # === Overall header ===
+        overall = self.executable_status()
+        blocks.append(RawHTML("<div class='subquery-section-title'>Executability Summary</div>"))
+        blocks.append(
+            RawHTML(
+                f"<div style='margin-bottom:8px'>"
+                f"<b>Overall report executability:</b> {exec_badge(overall)}</div>"
+            )
+        )
+
+        # === Section 1: Dash cohorts ===
+        headers = [
+            "Cohort",
+            "Definition",
+            "Measure",
+            "Status",
+        ]
+
+        cohort_rows = []
+
+        for rc in self.cohorts:
+            cohort = rc.cohort
+            if not cohort:
+                cohort_rows.append([
+                    td("<i>Missing cohort</i>"), td(""), td(""), td(exec_badge(ExecStatus.FAIL))
+                ])
+                continue
+
+            for d in cohort.definitions:
+                check = d.is_executable()
+                cohort_rows.append([
+                    td(cohort.dash_cohort_name),
+                    td(d.dash_cohort_def_name),
+                    td(d.dash_cohort_measure.name if d.dash_cohort_measure else "<i>None</i>"),
+                    td(exec_badge(check.status)),
+                ])
+
+        if len(cohort_rows) > 1:
+            blocks.append(
+                RawHTML(
+                    table(
+                        headers=headers,
+                        rows=cohort_rows,
+                        cls="concept-table compact"
+                    )
+                )
+            )
+        else:
+            blocks.append(RawHTML("<div class='muted'><i>No dash cohorts</i></div>"))
+
+        # === Section 2: Indicators ===
+        blocks.append(RawHTML("<div class='subquery-section-title'>Indicators</div>"))
+
+        headers = [
+            "Indicator",
+            "Numerator",
+            "Num",
+            "Denominator",
+            "Den",
+            "Indicator Status",
+        ]
+
+        indicator_rows = []
+
+        for ind in sorted(self.indicators):
+            check = ind.is_executable()
+
+            indicator_rows.append([
+                td(ind.indicator_description),
+                td(ind.numerator_measure.name),
+                td(exec_badge(check.numerator.status)),
+                td(ind.denominator_measure.name),
+                td(exec_badge(check.denominator.status)),
+                td(exec_badge(check.status)),
+            ])
+
+        if len(indicator_rows) > 1:
+            blocks.append(
+                RawHTML(
+                    table(
+                        headers=headers,
+                        rows=indicator_rows,
+                        cls="concept-table compact"
+                    )
+                )
+            )
+        else:
+            blocks.append(RawHTML("<div class='muted'><i>No indicators</i></div>"))
+
+        return blocks
+    
+
     
 class ReportVersion(HTMLRenderable, Base):
     """Report versioning table. There should be only one current version per report."""

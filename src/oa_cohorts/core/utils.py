@@ -4,7 +4,7 @@ from pathlib import Path
 from IPython.display import HTML, display
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-
+from .executability import ExecStatus
 
 def esc(x) -> str:
     return "" if x is None else html.escape(str(x))
@@ -29,11 +29,9 @@ def table(headers: Iterable[str], rows: Iterable[Iterable[str]], *, cls: str | N
     body = "".join(tr(r) for r in rows)
     return tag("table", f"<thead>{head}</thead><tbody>{body}</tbody>", cls=cls)
 
-
 class SupportsHTML(Protocol):
     # HTML protocol + raw passthrough
     def _repr_html_(self) -> str: ...
-
 
 class RawHTML:
     def __init__(self, html: str):
@@ -41,6 +39,13 @@ class RawHTML:
 
     def _repr_html_(self) -> str:
         return self.html
+    
+def exec_badge(status: ExecStatus) -> RawHTML:
+    return RawHTML({
+        ExecStatus.PASS: "<span class='badge ok'>PASS</span>",
+        ExecStatus.WARN: "<span class='badge warn'>WARN</span>",
+        ExecStatus.FAIL: "<span class='badge bad'>FAIL</span>",
+    }[status])
 
 HTMLChild = Union["HTMLRenderable", RawHTML, str]
 

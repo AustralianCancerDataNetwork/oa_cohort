@@ -7,6 +7,7 @@ import sqlalchemy.orm as so
 from itertools import chain
 from typing import Sequence, Any, TYPE_CHECKING
 from ..core.utils import HTMLRenderable, RawHTML
+from ..core.executability import ExecStatus, MeasureExecCheck
 
 if TYPE_CHECKING:
     from .measure import Measure
@@ -114,6 +115,20 @@ class DashCohortDef(HTMLRenderable, Base):
             blocks.append(RawHTML("<div class='muted'><i>No measure linked</i></div>"))
 
         return blocks
+    
+
+    def is_executable(self) -> MeasureExecCheck:
+        """
+        A cohort definition is executable iff its backing measure is executable.
+        """
+        if not self.dash_cohort_measure:
+            return MeasureExecCheck(
+                status=ExecStatus.FAIL,
+                ok_variants=[],
+                failed_variants={"MEASURE": "No measure linked to cohort definition"},
+            )
+
+        return self.dash_cohort_measure.is_executable()
 
 class DashCohort(HTMLRenderable, Base):
     """Top-level class for dash cohorts."""

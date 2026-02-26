@@ -15,7 +15,9 @@ def get_measurable_registry() -> dict[RuleTarget, Type[MeasurableBase]]:
     )
 
     from .ev_measureables import (
-        MeasurementMeasurable
+        MeasurementMeasurable,
+        ProcedureMeasurable,
+        ObserveMeasurable
     )
 
     return {
@@ -25,7 +27,9 @@ def get_measurable_registry() -> dict[RuleTarget, Type[MeasurableBase]]:
         RuleTarget.dx_mets: MetsConditionMeasurable,
         RuleTarget.tx_surgical: SurgicalMeasurable,
         RuleTarget.tx_current_episode: AllCurrentTreatmentMeasurable,
-        RuleTarget.meas_concept: MeasurementMeasurable
+        RuleTarget.meas_concept: MeasurementMeasurable,
+        RuleTarget.proc_concept: ProcedureMeasurable,
+        RuleTarget.obs_concept: ObserveMeasurable
     }
 
 

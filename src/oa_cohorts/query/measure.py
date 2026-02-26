@@ -1,17 +1,15 @@
 from __future__ import annotations
 import sqlalchemy as sa
 import sqlalchemy.orm as so
-from orm_loader.helpers import Base
-from .query_rule import QueryRule
-from .subquery import Subquery
-from ..core import RuleCombination
-from ..measurables import get_measurable_registry, MeasurableBase
-from ..core.utils import HTMLRenderable, RawHTML, table, td, esc, HTMLChild, sql_block
-
 from sqlalchemy.sql import Select, CompoundSelect
-from typing import TypeAlias, Optional, Sequence, Any, cast, ClassVar
-
 from sqlalchemy.engine import Row as SARow
+from typing import TypeAlias, Optional, Sequence, Any, cast, Callable
+
+from orm_loader.helpers import Base
+from .subquery import Subquery
+from ..core.executability import MeasureExecCheck, ExecStatus
+from ..core import RuleCombination
+from ..core.utils import HTMLRenderable, RawHTML, table, td, esc, HTMLChild, sql_block
 Row = SARow[Any]
 
 SQLQuery: TypeAlias = Select | CompoundSelect
@@ -21,6 +19,7 @@ COMBINATION_SQL = {
     RuleCombination.rule_and: sa.intersect_all,
     RuleCombination.rule_except: sa.except_all,
 }
+
 
 class Measure(HTMLRenderable, Base):
     __tablename__ = "measure"
@@ -78,6 +77,55 @@ class Measure(HTMLRenderable, Base):
         kids = "\n".join(f"  - {c.name} (#{c.measure_id})" for c in self.children)
         return f"{header}\n{kids}"
     
+
+    def is_executable(self) -> MeasureExecCheck:
+        """
+        Check whether this measure can successfully generate SQL.
+
+        PASS  = all variants compile
+        WARN  = at least one compiles, at least one fails
+        FAIL  = none compile
+        """
+        # Special case: measure_id = 0 (full cohort)
+        if self.measure_id == 0:
+            return MeasureExecCheck(
+                status=ExecStatus.PASS,
+                ok_variants=["FULL_COHORT"],
+                failed_variants={},
+            )
+
+        compiler = MeasureSQLCompiler(self)
+
+        checks: list[tuple[str, Callable]] = [
+            ("ANY", compiler.sql_any),
+            ("FIRST", compiler.sql_first),
+            ("UNDATED", compiler.sql_undated),
+        ]
+
+        ok: list[str] = []
+        failed: dict[str, str] = {}
+
+        for label, fn in checks:
+            try:
+                stmt = fn()
+                # Force compilation (no execution)
+                _ = self._render_sql(stmt)
+                ok.append(label)
+            except Exception as e:
+                failed[label] = str(e)
+
+        if ok and not failed:
+            status = ExecStatus.PASS
+        elif ok and failed:
+            status = ExecStatus.WARN
+        else:
+            status = ExecStatus.FAIL
+
+        return MeasureExecCheck(
+            status=status,
+            ok_variants=ok,
+            failed_variants=failed,
+        )
 
     def _html_css_class(self) -> str:
         return "measure"

@@ -2,10 +2,11 @@ from __future__ import annotations
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from orm_loader.helpers import Base
-from .measure import Measure
 from ..core import RuleTemporality
 from ..core.utils import HTMLRenderable, RawHTML, esc
 from .report import Report, report_indicator_map
+from .measure import Measure
+from ..core.executability import ExecStatus, IndicatorExecCheck
 
 class Indicator(HTMLRenderable, Base):
     __tablename__ = 'indicator'
@@ -106,4 +107,30 @@ class Indicator(HTMLRenderable, Base):
         blocks.append(self.denominator_measure)
 
         return blocks
+    
+    def is_executable(self) -> IndicatorExecCheck:
+        """
+        Indicator is executable iff BOTH numerator and denominator are executable.
+
+        PASS = both PASS
+        WARN = at least one WARN, none FAIL
+        FAIL = either FAIL
+        """
+        num_check = self.numerator_measure.is_executable()
+        den_check = self.denominator_measure.is_executable()
+
+        statuses = {num_check.status, den_check.status}
+
+        if ExecStatus.FAIL in statuses:
+            status = ExecStatus.FAIL
+        elif ExecStatus.WARN in statuses:
+            status = ExecStatus.WARN
+        else:
+            status = ExecStatus.PASS
+
+        return IndicatorExecCheck(
+            status=status,
+            numerator=num_check,
+            denominator=den_check,
+        )
     
