@@ -25,3 +25,6 @@
 
 ## 0.2.4
 - report payload handler
+
+## 0.2.5
+- moved string field for conditions

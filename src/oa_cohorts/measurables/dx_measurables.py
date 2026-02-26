@@ -13,7 +13,7 @@ class AnyConditionMeasurable(ModifiedCondition, MeasurableBase, Base):
         episode_id_attr="condition_episode",
         event_date_attr="condition_start_date",
         value_concept_attr="condition_concept_id",
-        value_string_attr="condition_concept"
+        value_string_attr="condition_code"
     )
 
 class StagedConditionMeasurable(StageModifier, MeasurableBase, Base):
@@ -35,5 +35,5 @@ class MetsConditionMeasurable(ModifiedCondition, MeasurableBase, Base):
         episode_id_attr="condition_episode",
         event_date_attr="metastatic_disease_date",
         value_concept_attr="metastatic_disease_concept_id",
-        value_string_attr="condition_concept"
+        value_string_attr="condition_code"
     )

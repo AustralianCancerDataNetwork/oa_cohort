@@ -250,8 +250,6 @@ class MeasureRelationship(HTMLRenderable, Base):
 
     parent: so.Mapped["Measure"] = so.relationship("Measure", foreign_keys=[parent_measure_id], back_populates='child_links')
     child: so.Mapped["Measure"] = so.relationship("Measure", foreign_keys=[child_measure_id], back_populates='parent_links')
-
-
     
     def __repr__(self) -> str:
         return f"<MeasureRelationship parent={self.parent_measure_id} child={self.child_measure_id}>"
