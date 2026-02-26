@@ -28,3 +28,6 @@
 
 ## 0.2.5
 - moved string field for conditions
+
+## 0.2.6
+- upversion constructs
