@@ -75,8 +75,6 @@ class HTMLRenderable:
         display(HTML(style_tag))
         cls._CSS_LOADED = True
 
-    
-
     def _html_title(self) -> str:
         return self.__class__.__name__
 

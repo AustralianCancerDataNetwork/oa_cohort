@@ -11,7 +11,11 @@ def get_measurable_registry() -> dict[RuleTarget, Type[MeasurableBase]]:
 
     from .tx_measurables import (
         SurgicalMeasurable,
-        AllCurrentTreatmentMeasurable
+        AllCurrentTreatmentMeasurable,
+        ChemoTreatmentMeasurable,
+        RTTreatmentMeasurable,
+        IntentChemoMeasurable,
+        IntentRTMeasurable
     )
 
     from .ev_measureables import (
@@ -29,7 +33,11 @@ def get_measurable_registry() -> dict[RuleTarget, Type[MeasurableBase]]:
         RuleTarget.tx_current_episode: AllCurrentTreatmentMeasurable,
         RuleTarget.meas_concept: MeasurementMeasurable,
         RuleTarget.proc_concept: ProcedureMeasurable,
-        RuleTarget.obs_concept: ObserveMeasurable
+        RuleTarget.obs_concept: ObserveMeasurable,
+        RuleTarget.tx_chemotherapy: ChemoTreatmentMeasurable,
+        RuleTarget.tx_radiotherapy: RTTreatmentMeasurable,
+        RuleTarget.intent_sact: IntentChemoMeasurable,
+        RuleTarget.intent_rt: IntentRTMeasurable,
     }
 
 
