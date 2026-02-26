@@ -2,6 +2,10 @@
 
 This package provides the core machinery for defining, executing, and inspecting cohort-based reports over OMOP-style clinical data. It’s designed to support building real-world evidence reports from composable clinical rules, measures, cohorts, and indicators, with both programmatic APIs and lightweight HTML rendering for debugging and exploration.
 
+The framework implemented here supports configuration-driven clinical quality indicators over OMOP-harmonised data, with explicit support for disease and treatment episodes, temporality, and combinatorial logic. Measures can be defined in terms of diagnoses, treatments, procedures, observations, measurements, and demographics, and composed into clinically interpretable cohorts and indicators. 
+
+This enables the same indicator definitions to support bulk benchmarking, trend analysis over time, and patient-level drill-down, without rewriting query logic for each use case. In practice, this provides a bridge between formal indicator specifications and the operational reality of multidisciplinary care.
+
 At a high level, the system lets you:
 
 * Define query rules (exact, hierarchical, scalar thresholds, phenotypes, etc.)
