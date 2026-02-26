@@ -1,13 +1,35 @@
 from __future__ import annotations
 import sqlalchemy as sa
 import sqlalchemy.orm as so
+from dataclasses import dataclass
+from datetime import date
 from typing import Optional, Sequence, cast, Callable
 from orm_loader.helpers import Base
 from .typing import Row, SQLQuery, COMBINATION_SQL
 from .subquery import Subquery
 from ..core.executability import MeasureExecCheck, ExecStatus
 from ..core import RuleCombination
-from ..core.utils import HTMLRenderable, RawHTML, table, td, esc, HTMLChild, sql_block
+from ..core.html_utils import HTMLRenderable, RawHTML, table, td, esc, HTMLChild, sql_block
+
+
+
+@dataclass(frozen=True)
+class MeasureMember:
+    person_id: int
+    measure_resolver: int
+    episode_id: Optional[int] = None
+    measure_date: Optional[date] = None
+
+    @classmethod
+    def from_row(cls, r):
+        return cls(
+            person_id=r.person_id,
+            measure_resolver=r.measure_resolver,
+            episode_id=getattr(r, "episode_id", None),
+            measure_date=getattr(r, "measure_date", None),
+        )
+    
+
 
 class Measure(HTMLRenderable, Base):
     __tablename__ = "measure"
@@ -35,18 +57,10 @@ class Measure(HTMLRenderable, Base):
         lazy="selectin",
     )
 
-    _members: Sequence[Row] | None = None
-
-    # @so.reconstructor
-    # def init_on_load(self) -> None:
-    #     self._members = ()
-
-    # def __init__(self, *args, **kwargs):
-    #     super().__init__(*args, **kwargs)
-    #     self.init_on_load()
+    _members: Sequence[MeasureMember] | None = None
 
     @property
-    def members(self) -> Sequence[Row]:
+    def members(self) -> Sequence[MeasureMember]:
         if self._members is None:
             raise RuntimeError(
                 f"Measure {self.measure_id} ('{self.name}') has not been executed yet. "
@@ -375,7 +389,7 @@ class MeasureSQLCompiler:
 class MeasureExecutor:
     def __init__(self, db):
         self.db = db
-        self._cache: dict[int, Sequence[Row]] = {}
+        self._cache: dict[int, Sequence[MeasureMember]] = {}
 
     def execute(
         self,
@@ -384,7 +398,8 @@ class MeasureExecutor:
         ep_override: bool = False,
         people: list[int] | None = None,
         force_refresh: bool = False,
-    ) -> Sequence[Row]:
+    ) -> Sequence[MeasureMember]:
+        
         if measure.measure_id == 0:
             raise RuntimeError(
                 "Measure ID = 0 represents FULL COHORT and must be resolved at the Report level. "
@@ -394,7 +409,7 @@ class MeasureExecutor:
             rows = self._cache[measure.measure_id]
             measure._members = rows
             return rows
-
+        
         sql = MeasureSQLCompiler(measure).sql_any(ep_override=ep_override)
 
         if people:
@@ -402,7 +417,7 @@ class MeasureExecutor:
             sql = sa.select(sq).where(sq.c.person_id.in_(people))
 
         rows = self.db.execute(sql).all()
-        rows_typed = cast(Sequence[Row], rows)
+        rows_typed = [MeasureMember.from_row(r) for r in rows]
         self._cache[measure.measure_id] = rows_typed
         measure._members = rows_typed
-        return rows_typed
+        return measure._members

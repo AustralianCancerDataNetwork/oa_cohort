@@ -5,7 +5,7 @@ from orm_loader.helpers import Base
 from omop_alchemy.cdm.model import Concept
 from ..measurables import get_measurable_registry
 from ..core import RuleMatcher, ThresholdDirection, RuleTarget
-from ..core.utils import HTMLRenderable, RawHTML, td, table, render_sql, esc
+from ..core.html_utils import HTMLRenderable, RawHTML, td, table, render_sql, esc
 from .phenotype import Phenotype
 
 class QueryRule(Base, HTMLRenderable):

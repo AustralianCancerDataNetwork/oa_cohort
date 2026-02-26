@@ -1,16 +1,16 @@
 from __future__ import annotations
-from oa_cohorts.core.utils import HTMLRenderable
+from oa_cohorts.core.html_utils import HTMLRenderable
 from orm_loader.helpers import Base
 from sqlalchemy.ext.associationproxy import association_proxy
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from itertools import chain
 from typing import Sequence, Any, TYPE_CHECKING
-from ..core.utils import HTMLRenderable, RawHTML
+from ..core.html_utils import HTMLRenderable, RawHTML
 from ..core.executability import ExecStatus, MeasureExecCheck
 
 if TYPE_CHECKING:
-    from .measure import Measure
+    from .measure import Measure, MeasureMember
     from .report import ReportCohortMap
 
 from sqlalchemy.engine import Row as SARow
@@ -48,7 +48,7 @@ class DashCohortDef(HTMLRenderable, Base):
     )
 
     @property
-    def members(self) -> Sequence[Row]:
+    def members(self) -> Sequence["MeasureMember"]:
         """
         Members of a cohort definition are exactly the members of its backing measure.
         Assumes the measure has already been executed.
@@ -141,9 +141,9 @@ class DashCohort(HTMLRenderable, Base):
         ]
 
     @property
-    def members(self) -> Sequence[Row]:
+    def members(self) -> Sequence["MeasureMember"]:
         seen = set()
-        out: list[Row] = []
+        out: list[MeasureMember] = []
 
         for d in self.definitions:
             for row in d.members:

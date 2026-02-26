@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, List
 from orm_loader.helpers import Base
 from omop_alchemy.cdm.model import Concept
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
-from ..core.utils import esc, td, th, tr, table, HTMLRenderable, RawHTML
+from ..core.html_utils import esc, td, th, tr, table, HTMLRenderable, RawHTML
 
 class Phenotype(HTMLRenderable, Base):
     __tablename__ = "phenotype"

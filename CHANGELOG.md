@@ -22,3 +22,6 @@
 ## 0.2.3
 - added death measure
 - fixed sql resolution for any/earliest
+
+## 0.2.4
+- report payload handler

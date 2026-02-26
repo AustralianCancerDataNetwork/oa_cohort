@@ -4,9 +4,9 @@ import sqlalchemy.orm as so
 from typing import Sequence
 from orm_loader.helpers import Base
 from ..core import RuleTemporality
-from ..core.utils import HTMLRenderable, RawHTML, esc
+from ..core.html_utils import HTMLRenderable, RawHTML, esc
 from .report import Report, report_indicator_map
-from .measure import Measure
+from .measure import Measure, MeasureMember
 from .typing import Row
 from ..core.executability import ExecStatus, IndicatorExecCheck
 
@@ -60,14 +60,14 @@ class Indicator(HTMLRenderable, Base):
             self.denominator_measure,
             people=people,
         )
-        
+
         executor.execute(
             self.numerator_measure,
             people=people,
         )
 
     @property
-    def numerator_members(self) -> Sequence[Row]:
+    def numerator_members(self) -> Sequence[MeasureMember]:
         """
         Members of the numerator cohort (delegates to numerator measure).
         Returns only those members who are also in the denominator cohort, as per indicator definition
@@ -80,7 +80,7 @@ class Indicator(HTMLRenderable, Base):
         return list(num & den)
 
     @property
-    def denominator_members(self) -> Sequence[Row]:
+    def denominator_members(self) -> Sequence[MeasureMember]:
         """
         Members of the denominator cohort (delegates to denominator measure).
         Assumes the denominator measure has been executed.

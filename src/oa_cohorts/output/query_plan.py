@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from typing import Iterable, Sequence, TypeAlias, Protocol, runtime_checkable, Literal
 
 from sqlalchemy.sql import Select, CompoundSelect
-from ..core.utils import HTMLRenderable, RawHTML, esc, table, td
-from .measure import Measure, MeasureSQLCompiler
-from .subquery import Subquery
+from ..core.html_utils import HTMLRenderable, RawHTML, esc, table, td
+from ..query.measure import Measure, MeasureSQLCompiler
+from ..query.subquery import Subquery
 from ..core import RuleCombination
 
 SQLQuery: TypeAlias = Select | CompoundSelect
@@ -52,6 +52,17 @@ class QueryNode(HTMLRenderable):
     Base class for nodes in the logic tree.
     Keep this *tiny*: name/summary + children + optional SQL previews.
     """
+
+    def iter_measures(self) -> Iterable[Measure]:
+        if isinstance(self, MeasureNode):
+            yield self.measure
+        for child in self.children():
+            yield from child.iter_measures()
+
+    def iter_nodes(self) -> Iterable["QueryNode"]:
+        yield self
+        for c in self.children():
+            yield from c.iter_nodes()
 
     def title(self) -> str:
         return self.__class__.__name__
@@ -176,7 +187,7 @@ class QueryPlan(HTMLRenderable):
     """
     root: QueryNode
     title_text: str = "Query Plan"
-
+    
     def _html_title(self) -> str:
         return self.title_text
 

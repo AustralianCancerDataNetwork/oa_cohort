@@ -5,7 +5,7 @@ from orm_loader.helpers import Base
 from .query_rule import QueryRule
 from ..core import RuleTarget, RuleTemporality
 from ..measurables import get_measurable_registry, MeasurableBase
-from ..core.utils import HTMLRenderable, RawHTML, table, td, esc
+from ..core.html_utils import HTMLRenderable, RawHTML, table, td, esc
 
 from sqlalchemy.sql import Select, CompoundSelect
 from typing import TypeAlias
@@ -109,7 +109,6 @@ class Subquery(HTMLRenderable, Base):
             ep_override=ep_override,
         )
     
-
     def get_subquery_any(self, *, ep_override: bool = False) -> SQLQuery:
         """
         Return all qualifying rows with dates (UNION ALL over rules).

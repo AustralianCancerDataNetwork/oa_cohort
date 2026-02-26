@@ -6,9 +6,10 @@ import sqlalchemy.orm as so
 from sqlalchemy.ext.hybrid import hybrid_property
 from orm_loader.helpers import Base, get_logger
 from sqlalchemy.ext.associationproxy import association_proxy
-from ..core.utils import HTMLRenderable, RawHTML, esc, td, th, exec_badge, table
+from ..core.html_utils import HTMLRenderable, RawHTML, esc, td, exec_badge, table
 from ..core import ReportStatus
 from ..core.executability import ExecStatus
+from .typing import PersonFilter
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -140,7 +141,15 @@ class Report(HTMLRenderable, Base):
     def members(self):
         return list(set(chain.from_iterable([c.members for c in self.report_cohorts])))
 
-    def execute(self, db: so.Session, *, people: list[int] | None = None, strict: bool = True):
+
+    def execute(
+            self, 
+            db: so.Session, 
+            *, 
+            people: list[int] | None = None, 
+            person_filter: "PersonFilter | None" = None,
+            strict: bool = True
+        ) -> None:
         """
         Execute all measures required by this report.
         """
@@ -155,6 +164,7 @@ class Report(HTMLRenderable, Base):
                 executor.execute(m, people=people)
             except Exception as e:
                 logger.error(f"Error executing measure {m.name} (ID {m.measure_id}): {e}")
+                db.rollback()
                 if strict:
                     raise
 
@@ -162,6 +172,11 @@ class Report(HTMLRenderable, Base):
         for m in self.report_measures:
             if m.measure_id == 0:
                 m._members = cohort_members
+
+    def assert_executed(self):
+        for m in self.report_measures:
+            if m.measure_id != 0 and m._members is None:
+                raise RuntimeError(f"Measure {m.measure_id} not executed")
 
     @hybrid_property
     def version_string(self):
@@ -328,8 +343,6 @@ class Report(HTMLRenderable, Base):
             blocks.append(RawHTML("<div class='muted'><i>No indicators</i></div>"))
 
         return blocks
-    
-
     
 class ReportVersion(HTMLRenderable, Base):
     """Report versioning table. There should be only one current version per report."""
