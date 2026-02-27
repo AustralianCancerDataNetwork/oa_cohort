@@ -49,3 +49,6 @@ plugins:
 
 nav:
   - Home: index.md
+  - Measurables: measurables.md
+  - Outputs:
+    - Measure Resolution: measure_resolution.md

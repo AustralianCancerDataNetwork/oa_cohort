@@ -15,6 +15,22 @@ from ..core.html_utils import HTMLRenderable, RawHTML, table, td, esc, HTMLChild
 
 @dataclass(frozen=True)
 class MeasureMember:
+
+    """
+    Immutable representation of a resolved measure membership event.
+
+    Attributes
+    ----------
+    person_id:
+        Person identifier.
+    measure_resolver:
+        Logical grouping key (often episode or event id).
+    episode_id:
+        Optional episode linkage.
+    measure_date:
+        Optional date associated with the qualifying event.
+    """
+    
     person_id: int
     measure_resolver: int
     episode_id: Optional[int] = None
@@ -32,6 +48,37 @@ class MeasureMember:
 
 
 class Measure(HTMLRenderable, Base):
+    """
+    Recursive logical unit producing a set of MeasureMember rows.
+
+    A Measure can be:
+
+    - Leaf:
+        Backed by a Subquery.
+    - Composite:
+        Combination of child measures via RuleCombination.
+
+    Semantics
+    ---------
+    combination:
+        Defines how child measures are combined (OR / AND / EXCEPT).
+
+    subquery:
+        Atomic SQL-producing unit (optional if children exist).
+
+    Execution Model
+    ---------------
+    Measures do NOT execute themselves.
+    They are executed via MeasureExecutor.
+
+    After execution:
+        self._members holds cached MeasureMember rows.
+
+    Special Case
+    ------------
+    measure_id == 0 represents FULL COHORT.
+    It is resolved at Report level and cannot be executed directly.
+    """
     __tablename__ = "measure"
     __allow_unmapped__ = True 
     measure_id: so.Mapped[int] = so.mapped_column(primary_key=True)
@@ -296,6 +343,20 @@ class MeasureRelationship(HTMLRenderable, Base):
 
 
 class MeasureSQLCompiler:
+    """
+    Compiles a Measure into SQLAlchemy Select constructs.
+
+    Responsibilities
+    ----------------
+    - Resolve leaf subqueries
+    - Recursively compile child measures
+    - Apply RuleCombination semantics
+    - Normalise column shape to:
+        (person_id, episode_id, measure_resolver, measure_date)
+
+    This class performs SQL compilation only.
+    It does NOT execute queries.
+    """
     def __init__(self, measure: Measure):
         self.measure = measure
 
@@ -304,6 +365,19 @@ class MeasureSQLCompiler:
         return combiner(*parts)
     
     def _normalise(self, q: SQLQuery) -> sa.Subquery:
+        """
+        Ensure child query produces required canonical columns.
+
+        All measure queries must expose:
+            person_id
+            episode_id
+            measure_resolver
+            measure_date
+
+        Raises
+        ------
+        ValueError if required columns are missing.
+        """
         sq = q.subquery()
 
         required = {"person_id", "episode_id", "measure_resolver", "measure_date"}
@@ -385,6 +459,20 @@ class MeasureSQLCompiler:
         ).select_from(lhs)
     
 class MeasureExecutor:
+
+    """
+    Executes compiled measure SQL and materialises MeasureMember objects.
+
+    Features
+    --------
+    - Per-instance execution cache (by measure_id)
+    - Optional person-level restriction
+    - Result typing into MeasureMember dataclass
+
+    Executor instances are intended to be short-lived
+    within a report execution boundary.
+    """
+
     def __init__(self, db):
         self.db = db
         self._cache: dict[int, Sequence[MeasureMember]] = {}
@@ -397,7 +485,24 @@ class MeasureExecutor:
         people: list[int] | None = None,
         force_refresh: bool = False,
     ) -> Sequence[MeasureMember]:
-        
+        """
+        Execute a measure and return its members.
+
+        Parameters
+        ----------
+        measure:
+            Measure to execute.
+        ep_override:
+            Override episode behaviour.
+        people:
+            Optional person_id filter.
+        force_refresh:
+            Ignore execution cache.
+
+        Returns
+        -------
+        Sequence[MeasureMember]
+        """
         if measure.measure_id == 0:
             raise RuntimeError(
                 "Measure ID = 0 represents FULL COHORT and must be resolved at the Report level. "

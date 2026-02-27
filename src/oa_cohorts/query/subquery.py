@@ -20,6 +20,23 @@ subquery_rule_map = sa.Table(
 )
 
 class Subquery(HTMLRenderable, Base):
+    """
+    Atomic SQL-producing unit driven by QueryRule objects.
+
+    A Subquery defines:
+
+    - target: RuleTarget (e.g., diagnosis, treatment)
+    - temporality: RuleTemporality (e.g., first, any)
+    - rules: list of QueryRule objects
+
+    Subqueries are responsible for:
+    - Determining which measurable class to use
+    - Building WHERE clauses
+    - Producing SQL fragments for ANY / FIRST / UNDATED variants
+
+    They do not combine across measures.
+    """
+
     __tablename__ = "subquery"
 
     subquery_id: so.Mapped[int] = so.mapped_column(primary_key=True)
@@ -111,8 +128,10 @@ class Subquery(HTMLRenderable, Base):
     
     def get_subquery_any(self, *, ep_override: bool = False) -> SQLQuery:
         """
-        Return all qualifying rows with dates (UNION ALL over rules).
+        Return UNION ALL over rule-level selects.
+
         Used when measure combination is OR.
+        Produces dated rows.
         """
         if not self.rules:
             raise ValueError(f"Subquery {self.subquery_id} has no rules")

@@ -87,7 +87,26 @@ class ReportCohortMap(HTMLRenderable, Base):
         return blocks
     
 class Report(HTMLRenderable, Base):
-    """Primary report class that holds the full report definition."""
+    """
+    Top-level reporting unit.
+
+    A Report defines:
+
+    - One or more DashCohorts (population definitions)
+    - One or more Indicators (numerator/denominator logic)
+    - Version metadata
+
+    Responsibilities
+    ----------------
+    - Coordinates execution of all required measures.
+    - Defines execution boundary for "measure_id = 0" (full cohort).
+    - Aggregates executable status across cohorts and indicators.
+    - Provides consolidated access to report-level measures and members.
+
+    Reports do NOT generate SQL directly.
+    They orchestrate MeasureExecutor usage.
+    """
+    
     __tablename__ = 'report'
 
     report_id: so.Mapped[int] = so.mapped_column(primary_key=True)

@@ -11,6 +11,25 @@ from .typing import Row
 from ..core.executability import ExecStatus, IndicatorExecCheck
 
 class Indicator(HTMLRenderable, Base):
+
+    """
+    Numerator / Denominator pairing representing a quality metric.
+
+    An Indicator defines:
+
+    - numerator_measure
+    - denominator_measure
+    - optional temporal constraints
+    - optional benchmark metadata
+
+    Execution Model
+    ----------------
+    An indicator is executable iff BOTH numerator and denominator measures
+    are executable.
+
+    Indicator does not own execution logic; it delegates to MeasureExecutor.
+    """
+
     __tablename__ = 'indicator'
 
     indicator_id: so.Mapped[int] = so.mapped_column(primary_key=True)
@@ -70,6 +89,7 @@ class Indicator(HTMLRenderable, Base):
     def numerator_members(self) -> Sequence[MeasureMember]:
         """
         Members of the numerator cohort (delegates to numerator measure).
+        
         Returns only those members who are also in the denominator cohort, as per indicator definition
         (i.e. I do not care about the numerator event for members not in the denominator).
         
