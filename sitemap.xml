@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://AustralianCancerDataNetwork.github.io/oa_cohort/</loc>
+         <lastmod>2026-02-28</lastmod>
+    </url>
+    <url>
+         <loc>https://AustralianCancerDataNetwork.github.io/oa_cohort/measurables/</loc>
+         <lastmod>2026-02-28</lastmod>
+    </url>
+    <url>
+         <loc>https://AustralianCancerDataNetwork.github.io/oa_cohort/measure_resolution/</loc>
+         <lastmod>2026-02-28</lastmod>
+    </url>
+    <url>
+         <loc>https://AustralianCancerDataNetwork.github.io/oa_cohort/query_rule_definitions/</loc>
+         <lastmod>2026-02-28</lastmod>
+    </url>
+</urlset>
