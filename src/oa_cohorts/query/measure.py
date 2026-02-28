@@ -15,7 +15,6 @@ from ..core.html_utils import HTMLRenderable, RawHTML, table, td, esc, HTMLChild
 
 @dataclass(frozen=True)
 class MeasureMember:
-
     """
     Immutable representation of a resolved measure membership event.
 
@@ -30,7 +29,7 @@ class MeasureMember:
     measure_date:
         Optional date associated with the qualifying event.
     """
-    
+
     person_id: int
     measure_resolver: int
     episode_id: Optional[int] = None

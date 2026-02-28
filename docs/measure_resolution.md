@@ -1,5 +1,6 @@
+# Measure Resolution 
 
-### MeasureMember - atomic unit of result
+## MeasureMember - atomic unit of result
 
 When a measure is executed, it produces a sequence of:
 
@@ -17,13 +18,15 @@ A `MeasureMember` represents a specific person qualifying for a measure at a spe
 It is not only the fact of membership, because it includes resolution to a time-stamped qualification event. 
 This distinction is critical for reporting, which requires flexible time-windowing periods to produce trends and per-period analysis.
 
-### Measure Combination Semantics
+## Measure Combination Semantics
 
 Measures use `RuleCombination` to compose child measures via `OR` or `AND`, and the handling of these semantics is significantly different when composing from lower levels.
 
-![Qualification temporal resolution](img/qualifying_temporal_resolution.png)
+![Qualification temporal resolution](img/temporal_resolver_1.png)
 
-#### OR Logic: Union of qualifying events
+### OR Logic: Union of qualifying events
+
+![Qualification temporal resolution](img/temporal_resolver_2.png)
 
 `OR` logic preserves all qualifying rows.
 
@@ -46,7 +49,9 @@ If a person has:
 
 Result: Two `MeasureMember` rows, with both dates preserved
 
-#### AND Logic: Resolver-Aligned Intersection
+### AND Logic: Resolver-Aligned Intersection
+
+![Qualification temporal resolution](img/temporal_resolver_3.png)
 
 `AND` logic is not simply “person appears in both”. It requires that the same resolver must satisfy all child criteria.
 
@@ -74,7 +79,7 @@ Result: One row, qualification date = Feb 15
 
 If RT occurred under episode 20 instead, there is no result (resolvers do not align)
 
-#### Nested Measures
+### Nested Measures
 
 Measures can be nested arbitrarily:
 

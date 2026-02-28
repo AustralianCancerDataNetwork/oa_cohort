@@ -28,6 +28,7 @@ markdown_extensions:
           format: !!python/name:mermaid2.fence_mermaid
   - toc:
       permalink: true
+      toc_depth: 2
 
 extra_javascript:
   - https://unpkg.com/mermaid@10/dist/mermaid.min.js
@@ -49,6 +50,10 @@ plugins:
 
 nav:
   - Home: index.md
-  - Measurables: measurables.md
+  - Inputs:
+    - Measurables: measurables.md
+    - Query Definitions: query_rule_definitions.md
+  - Execution:
+    - Example execution: example_execution.md
   - Outputs:
     - Measure Resolution: measure_resolution.md
