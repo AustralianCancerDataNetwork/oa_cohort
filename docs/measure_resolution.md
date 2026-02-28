@@ -21,6 +21,8 @@ This distinction is critical for reporting, which requires flexible time-windowi
 
 Measures use `RuleCombination` to compose child measures via `OR` or `AND`, and the handling of these semantics is significantly different when composing from lower levels.
 
+![Qualification temporal resolution](img/qualifying_temporal_resolution.png)
+
 #### OR Logic: Union of qualifying events
 
 `OR` logic preserves all qualifying rows.
