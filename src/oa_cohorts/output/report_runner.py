@@ -44,7 +44,7 @@ class ReportRunner:
                 else:
                     print(f"Warning: Preflight compilation failed for measure {m.measure_id} ({m.name}): {e}")
         # 2. Execute actual measures
-        self.report.execute(self.db, people=people, strict=strict)
+        self.report.execute(self._executor, people=people, strict=strict)
 
     def build_plans(self) -> dict[int, QueryPlan]:
         if not self._plans:

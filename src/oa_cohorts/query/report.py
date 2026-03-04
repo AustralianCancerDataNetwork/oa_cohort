@@ -151,20 +151,13 @@ class Report(HTMLRenderable, Base):
     @property
     def cohort_measures(self):
         return list(set(chain.from_iterable([c.measures for c in self.report_cohorts])))
-
-    # @property
-    # def report_measures(self):
-    #     return sorted(
-    #         set(self.numerator_measures + self.denominator_measures + self.cohort_measures),
-    #         key=lambda x: x.id,
-    #     )
     
     def members(self, executor: MeasureExecutor) -> Sequence["MeasureMember"]:
         return list(set(chain.from_iterable([c.members(executor) for c in self.report_cohorts])))
 
     def execute(
             self, 
-            db: so.Session, 
+            executor: MeasureExecutor,
             *, 
             people: list[int] | None = None, 
             person_filter: "PersonFilter | None" = None,
@@ -191,9 +184,9 @@ class Report(HTMLRenderable, Base):
             If True, raise on first failure.
             If False, log and continue.
         """
-        from .measure import MeasureExecutor
+        #from .measure import MeasureExecutor
+        #executor = MeasureExecutor(db)
 
-        executor = MeasureExecutor(db)
         for m in self.indicator_measures + self.cohort_measures:
             if m.measure_id == 0:
                 continue
@@ -202,7 +195,7 @@ class Report(HTMLRenderable, Base):
                 executor.execute(m, people=people)
             except Exception as e:
                 logger.error(f"Error executing measure {m.name} (ID {m.measure_id}): {e}")
-                db.rollback()
+                executor.db.rollback()
                 if strict:
                     raise
 

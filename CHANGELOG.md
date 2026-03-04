@@ -52,3 +52,6 @@
 
 ## 0.3.4
 - fixed measure name parameter in report runner
+
+## 0.3.5
+- passing corrected executor to report object
