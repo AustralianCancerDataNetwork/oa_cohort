@@ -40,9 +40,9 @@ class ReportRunner:
                 _ = plan.root.sql_any()
             except Exception as e:
                 if strict:
-                    raise RuntimeError(f"Preflight compilation failed for measure {m.measure_id} ({m.measure_name}): {e}")
+                    raise RuntimeError(f"Preflight compilation failed for measure {m.measure_id} ({m.name}): {e}")
                 else:
-                    print(f"Warning: Preflight compilation failed for measure {m.measure_id} ({m.measure_name}): {e}")
+                    print(f"Warning: Preflight compilation failed for measure {m.measure_id} ({m.name}): {e}")
         # 2. Execute actual measures
         self.report.execute(self.db, people=people, strict=strict)
 

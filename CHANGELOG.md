@@ -49,3 +49,6 @@
 
 ## 0.3.3
 - bump
+
+## 0.3.4
+- fixed measure name parameter in report runner
