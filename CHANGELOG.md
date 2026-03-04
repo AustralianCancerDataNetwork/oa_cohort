@@ -46,3 +46,6 @@
 
 ## 0.3.2
 - apply strict parameter during pre-flight execution as well as full execution
+
+## 0.3.3
+- bump
