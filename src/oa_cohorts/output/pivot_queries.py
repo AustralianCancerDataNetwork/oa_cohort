@@ -35,31 +35,37 @@ def build_cohort_demography(rows: Sequence[Row]) -> list[CohortDemographyRow]:
     return out
 
 
-def build_pivot_indicators(report: Report, executor: MeasureExecutor) -> list[PivotIndicatorRow]:
+def build_pivot_indicators(report: Report, executor: MeasureExecutor, strict: bool = True) -> list[PivotIndicatorRow]:
     rows: list[PivotIndicatorRow] = []
 
     for ind in report.indicators:
-        num = {mm for mm in ind.numerator_members(executor)}
-        den = {mm for mm in ind.denominator_members(executor)}
+        try:
+            num = {mm for mm in ind.numerator_members(executor)}
+            den = {mm for mm in ind.denominator_members(executor)}
 
-        for mm in num & den:
-            rows.append(
-                PivotIndicatorRow(
-                    person_id=mm.person_id,
-                    measure_resolver=mm.measure_resolver,
-                    numerator_date=mm.measure_date,
-                    denominator_date=mm.measure_date,  # or pull from den if you later preserve both
-                    numerator_measure_id=ind.numerator_measure.measure_id,
-                    denominator_measure_id=ind.denominator_measure.measure_id,
-                    indicator=ind.indicator_id,
-                    numerator_value=True,
-                    denominator_value=True,
+            for mm in num & den:
+                rows.append(
+                    PivotIndicatorRow(
+                        person_id=mm.person_id,
+                        measure_resolver=mm.measure_resolver,
+                        numerator_date=mm.measure_date,
+                        denominator_date=mm.measure_date,  # or pull from den if you later preserve both
+                        numerator_measure_id=ind.numerator_measure.measure_id,
+                        denominator_measure_id=ind.denominator_measure.measure_id,
+                        indicator=ind.indicator_id,
+                        numerator_value=True,
+                        denominator_value=True,
+                    )
                 )
-            )
+        except Exception as e:
+            if strict:
+                raise
+            else:
+                print(f"Error processing indicator {ind.indicator_id}: {e}")
 
     return rows
 
-def build_pivot_cohort(report: Report, executor: MeasureExecutor) -> list[PivotCohortRow]:
+def build_pivot_cohort(report: Report, executor: MeasureExecutor, strict: bool = True) -> list[PivotCohortRow]:
     rows: list[PivotCohortRow] = []
 
     for rc in report.cohorts:
@@ -70,18 +76,24 @@ def build_pivot_cohort(report: Report, executor: MeasureExecutor) -> list[PivotC
             if not m:
                 continue
 
-            for mm in m.members(executor):
-                rows.append(
-                    PivotCohortRow(
-                        episode_id=mm.episode_id,
-                        measure_date=mm.measure_date,
-                        measure_resolver=mm.measure_resolver,
-                        person_id=mm.person_id,
-                        cohort_label=cohort_label,
-                        subcohort_label=d.dash_cohort_def_name,
-                        measure_id=m.measure_id,
+            try:
+                for mm in m.members(executor):
+                    rows.append(
+                        PivotCohortRow(
+                            episode_id=mm.episode_id,
+                            measure_date=mm.measure_date,
+                            measure_resolver=mm.measure_resolver,
+                            person_id=mm.person_id,
+                            cohort_label=cohort_label,
+                            subcohort_label=d.dash_cohort_def_name,
+                            measure_id=m.measure_id,
+                        )
                     )
-                )
+            except Exception as e:
+                if strict:
+                    raise
+                else:
+                    print(f"Error processing cohort {cohort_label} definition {d.dash_cohort_def_name}: {e}")
 
     return rows
 

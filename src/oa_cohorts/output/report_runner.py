@@ -35,10 +35,14 @@ class ReportRunner:
         """
         # 1. Preflight compile
         for m in self.report.indicator_measures + self.report.cohort_measures:
-            if m.measure_id != 0:
+            try:
                 plan = QueryPlan(root=MeasureNode(m))
                 _ = plan.root.sql_any()
-
+            except Exception as e:
+                if strict:
+                    raise RuntimeError(f"Preflight compilation failed for measure {m.measure_id} ({m.measure_name}): {e}")
+                else:
+                    print(f"Warning: Preflight compilation failed for measure {m.measure_id} ({m.measure_name}): {e}")
         # 2. Execute actual measures
         self.report.execute(self.db, people=people, strict=strict)
 
@@ -56,8 +60,11 @@ class ReportRunner:
                 ids.add(mm.measure_id)
         return ids
 
-    def collect_demography(self):
-        self.report.assert_executed()
+    def collect_demography(self, strict: bool = True) -> Sequence[Row]:
+        # we can tolerate some indicator execution failures but we do not support
+        # cohorts with failed execution, so strict only covers assertion step here
+        if strict:
+            self.report.assert_executed()
 
         cohort_person_ids = [m.person_id for m in self.report.members(self._executor)]
 
@@ -70,29 +77,29 @@ class ReportRunner:
         self._demography_rows = self.db.execute(stmt).all()
         return self._demography_rows
 
-    def collect_pivot_cohort(self):
+    def collect_pivot_cohort(self, strict: bool = True) -> list[PivotCohortRow]:
         """
         Build cohort × measure pivot rows from executed Measure.members.
         """
-        self._cohort_rows = build_pivot_cohort(self.report, executor=self._executor)
+        self._cohort_rows = build_pivot_cohort(self.report, executor=self._executor, strict=strict)
         return self._cohort_rows
 
-    def collect_pivot_indicators(self):
+    def collect_pivot_indicators(self, strict: bool = True) -> list[PivotIndicatorRow]:
         """
         Build indicator pivot rows from executed Measure.members.
         """
-        self._indicator_rows = build_pivot_indicators(self.report, executor=self._executor)
+        self._indicator_rows = build_pivot_indicators(self.report, executor=self._executor, strict=strict)
         return self._indicator_rows
     
-    def build_bundle(self) -> ReportBundle:
+    def build_bundle(self, strict: bool = True) -> ReportBundle:
         if self._demography_rows is None:
-            self.collect_demography()
+            self.collect_demography(strict=strict)
 
         if self._cohort_rows is None:
-            self.collect_pivot_cohort()
+            self.collect_pivot_cohort(strict=strict)
 
         if self._indicator_rows is None:
-            self.collect_pivot_indicators()
+            self.collect_pivot_indicators(strict=strict)
 
         assert self._demography_rows is not None
         assert self._cohort_rows is not None

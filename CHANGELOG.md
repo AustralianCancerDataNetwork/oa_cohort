@@ -43,3 +43,6 @@
 
 ## 0.3.1
 - report runner needs to skip measure id = 0
+
+## 0.3.2
+- apply strict parameter during pre-flight execution as well as full execution
