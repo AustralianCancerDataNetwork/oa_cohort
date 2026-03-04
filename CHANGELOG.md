@@ -40,3 +40,6 @@
 
 ## 0.3.0
 - changed ownership of membership caching to the execution layer to avoid confusion in python objects pointing to same measure rows not sharing cached execution results
+
+## 0.3.1
+- report runner needs to skip measure id = 0

@@ -35,8 +35,9 @@ class ReportRunner:
         """
         # 1. Preflight compile
         for m in self.report.indicator_measures + self.report.cohort_measures:
-            plan = QueryPlan(root=MeasureNode(m))
-            _ = plan.root.sql_any()
+            if m.measure_id != 0:
+                plan = QueryPlan(root=MeasureNode(m))
+                _ = plan.root.sql_any()
 
         # 2. Execute actual measures
         self.report.execute(self.db, people=people, strict=strict)
