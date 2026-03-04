@@ -74,17 +74,23 @@ class Subquery(HTMLRenderable, Base):
         use_string = any(r.requires_string for r in self.rules) 
         specs = measurable.__bound_measurable__
 
+        col = specs.value_concept_col
         if use_numeric:
-            col = specs.value_numeric_col
+            val_col = specs.value_numeric_col
             kind = "numeric"
         elif use_string:
+            # special case - string based filters are looking for CONCEPT CODE filters, not 
+            # actually string values in the sense of 'value_as_string' fields...
+            # todo: consider if there is a cleaner way to model this in the measurable definitions,
+            # as it is not intuitive that this is the case just from looking at the measurable class.
             col = specs.value_string_col
+            val_col = specs.value_string_col
             kind = "string"
         else:
-            col = specs.value_concept_col
+            val_col = specs.value_concept_col
             kind = "concept"
 
-        if col is None:
+        if val_col is None or col is None:
             raise ValueError(
                 f"{measurable.__name__} does not expose required {kind} value column "
                 f"for subquery {self.subquery_id}"

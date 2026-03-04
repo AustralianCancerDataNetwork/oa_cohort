@@ -106,7 +106,7 @@ class Report(HTMLRenderable, Base):
     Reports do NOT generate SQL directly.
     They orchestrate MeasureExecutor usage.
     """
-    
+
     __tablename__ = 'report'
 
     report_id: so.Mapped[int] = so.mapped_column(primary_key=True)
@@ -169,8 +169,26 @@ class Report(HTMLRenderable, Base):
             person_filter: "PersonFilter | None" = None,
             strict: bool = True
         ) -> None:
+
         """
         Execute all measures required by this report.
+
+        Execution Order
+        ---------------
+        1. All report-level measures (numerator, denominator, cohort measures)
+        2. Full-cohort (measure_id = 0) members resolved at report level
+
+        Parameters
+        ----------
+        db:
+            Active SQLAlchemy session.
+        people:
+            Optional list of person_ids to restrict execution.
+        person_filter:
+            Reserved for future filtering strategies.
+        strict:
+            If True, raise on first failure.
+            If False, log and continue.
         """
         from .measure import MeasureExecutor
 
@@ -341,9 +359,9 @@ class Report(HTMLRenderable, Base):
 
             indicator_rows.append([
                 td(ind.indicator_description),
-                td(ind.numerator_measure.name),
+                td(f'{ind.numerator_measure.id} - {ind.numerator_measure.name}'),
                 td(exec_badge(check.numerator.status)),
-                td(ind.denominator_measure.name),
+                td(f'{ind.denominator_measure.id} - {ind.denominator_measure.name}' if ind.denominator_measure else "<i>Full cohort</i>"),
                 td(exec_badge(check.denominator.status)),
                 td(exec_badge(check.status)),
             ])

@@ -379,22 +379,23 @@ class ScalarRule(QueryRule):
         threshold, concept = self.comparator
         if self.threshold_direction is None:
             raise RuntimeError(f'Threshold direction is not set on scalar rule {self.query_rule_id}')
-        if concept == 0:
-            concept_clause = sa.true()
-        else:
-            concept_clause = field == concept
-        field_comparator = sa.and_(field.is_not(None), concept_clause)
+
+        numeric_field = self.scalar_field
+
+        concept_clause = sa.true() if concept == 0 else field == concept
+
         if self.threshold_direction == ThresholdDirection.gt:
-            return sa.and_(field_comparator, self.scalar_field > threshold)
+            threshold_clause = numeric_field > threshold
         elif self.threshold_direction == ThresholdDirection.lt:
-            return sa.and_(field_comparator, self.scalar_field < threshold)
+            threshold_clause = numeric_field < threshold
         elif self.threshold_direction == ThresholdDirection.eq:
-            return sa.and_(field_comparator, self.scalar_field == threshold)
+            threshold_clause = numeric_field == threshold
         elif self.threshold_direction == ThresholdDirection.neq:
-            return sa.and_(field_comparator, self.scalar_field != threshold)
+            threshold_clause = numeric_field != threshold
         else:
             raise ValueError(f'Unknown threshold direction: {self.threshold_direction}')
         
+        return sa.and_(concept_clause, threshold_clause)    
     
     def _html_inner(self):
         bits = []

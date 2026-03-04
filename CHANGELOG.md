@@ -31,3 +31,6 @@
 
 ## 0.2.6
 - upversion constructs
+
+## 0.2.7
+- change scalar thresholding to be looking at correct fields
