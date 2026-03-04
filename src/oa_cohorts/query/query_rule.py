@@ -348,7 +348,7 @@ class ScalarRule(QueryRule):
     def comparator(self) -> tuple[int, int]:
         if self.scalar_threshold is None:
             raise RuntimeError(f'Scalar threshold is not set on rule {self.query_rule_id}')
-        if not self.concept:
+        if not self.concept and not self.concept_id == 0:
             raise RuntimeError(f'Rule concept {self.concept_id} not found')
         return self.scalar_threshold, self.concept_id
 

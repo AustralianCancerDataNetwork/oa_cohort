@@ -104,18 +104,7 @@ class Measure(HTMLRenderable, Base):
 
     def members(self, executor: MeasureExecutor):
         return executor.members(self)
-
-    # _members: Sequence[MeasureMember] | None = None
-
-    # @property
-    # def members(self) -> Sequence[MeasureMember]:
-    #     if self._members is None:
-    #         raise RuntimeError(
-    #             f"Measure {self.measure_id} ('{self.name}') has not been executed yet. "
-    #             "Call MeasureExecutor.execute(measure) before accessing members."
-    #         )
-    #     return self._members
-
+    
     @property
     def children(self) -> list["Measure"]:
         return [rel.child for rel in self.child_links]

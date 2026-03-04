@@ -75,7 +75,8 @@ class TxDaysBeforeDeath(TreatmentEnvelopeMV, MeasurableBase, Base):
         label="Treatment Days Before Death",
         person_id_attr="person_id",
         episode_id_attr="condition_episode",
-        event_date_attr="condition_start_date",
+        event_date_attr="condition_start_date",        
+        value_concept_attr="condition_episode",  
         value_numeric_attr="treatment_days_before_death"
     )
 
@@ -86,5 +87,6 @@ class TxDaysToStartTreatment(TreatmentEnvelopeMV, MeasurableBase, Base):
         person_id_attr="person_id",
         episode_id_attr="condition_episode",
         event_date_attr="condition_start_date",
+        value_concept_attr="condition_episode",  
         value_numeric_attr="days_from_dx_to_treatment"
     )
