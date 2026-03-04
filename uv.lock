@@ -1339,7 +1339,7 @@ requires-dist = [
     { name = "mkdocstrings-python", marker = "extra == 'dev'", specifier = ">=2.0.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
     { name = "myst-parser", marker = "extra == 'docs'" },
-    { name = "omop-constructs", specifier = ">=0.3.10" },
+    { name = "omop-constructs", specifier = ">=0.3.11" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "rich", marker = "extra == 'dev'", specifier = ">=13.0" },
@@ -1366,7 +1366,7 @@ wheels = [
 
 [[package]]
 name = "omop-constructs"
-version = "0.3.10"
+version = "0.3.11"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "omop-alchemy" },
@@ -1375,9 +1375,9 @@ dependencies = [
     { name = "sqlalchemy" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/74/37/faa6acd2fff242daf0132b883ff0a9c2546b06993011c1164b6f608332b7/omop_constructs-0.3.10.tar.gz", hash = "sha256:60ffb4e83d7ae0eb47748d3efa3ec0aaea04793ade1a37e06ff2b52a1de63e7c", size = 24030, upload-time = "2026-03-04T03:36:00.622Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e6/7b/c7e83a07ef7be316c395eb42043e3c958ea55b1f215f88ad1bbbb6924b69/omop_constructs-0.3.11.tar.gz", hash = "sha256:4bb325af7f0543f7b9f5df28b8eb1dde16beaad0c17c8825e51dee01ce098ce2", size = 24149, upload-time = "2026-03-04T06:27:03.058Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/59/3b/b9ef5ff649e1c4882d717b4c7c10c74040dfa901c7e30fd9a0e3646cd226/omop_constructs-0.3.10-py3-none-any.whl", hash = "sha256:ae96e16092bd8f8b0346e0d4b6d7bce1332830d8c6870fcf9df5956823a7d931", size = 49439, upload-time = "2026-03-04T03:35:59.411Z" },
+    { url = "https://files.pythonhosted.org/packages/32/a7/c4025199b607d5bd3d17baebe30e82854a51f35ac7f74e06f30d57a3231c/omop_constructs-0.3.11-py3-none-any.whl", hash = "sha256:9e441089c0308764e64239d47fdcfe4b807c68ae970397c14882cb7cb4ec22e4", size = 49789, upload-time = "2026-03-04T06:27:01.511Z" },
 ]
 
 [[package]]

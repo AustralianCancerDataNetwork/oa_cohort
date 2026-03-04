@@ -58,3 +58,6 @@
 
 ## 0.3.6
 - changing return typing around demography
+
+## 0.3.7
+- upversion constructs
