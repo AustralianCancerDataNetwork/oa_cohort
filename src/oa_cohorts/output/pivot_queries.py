@@ -148,6 +148,6 @@ def build_report_payload(report: Report) -> ReportPayload:
                 materialised_measure_id=None,
                 refresh_date=None,
             )
-            for m in report.report_measures
+            for m in report.indicator_measures + report.cohort_measures
         ],
     )

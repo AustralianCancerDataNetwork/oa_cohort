@@ -26,7 +26,18 @@ dash_cohort_def_map = sa.Table(
 )
 
 class DashCohortDef(HTMLRenderable, Base):
-    """Conceptually-useful filtering units for end users."""
+    """
+    Conceptually-useful filtering units for end users.
+
+    A DashCohortDef is a thin wrapper around a single Measure.
+    It exists to:
+
+    - Provide naming and grouping semantics
+    - Allow reuse of measures across multiple cohorts
+    - Expose a user-friendly abstraction
+
+    Execution is delegated to the backing measure.
+    """
     __tablename__ = 'dash_cohort_def'
 
     dash_cohort_def_id: so.Mapped[int] = so.mapped_column(primary_key=True)
@@ -115,7 +126,15 @@ class DashCohortDef(HTMLRenderable, Base):
         return self.dash_cohort_measure.is_executable()
 
 class DashCohort(HTMLRenderable, Base):
-    """Top-level class for dash cohorts."""
+    """
+    Logical population composed of one or more DashCohortDef objects.
+
+    Members of a DashCohort are the union of members from its
+    component definitions.
+
+    Cohorts do not generate SQL directly.
+    They orchestrate execution of their underlying measures.
+    """
     __tablename__ = 'dash_cohort'
 
     dash_cohort_id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)

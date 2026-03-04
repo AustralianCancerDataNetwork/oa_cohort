@@ -36,6 +36,30 @@
 .render-block.subquery { border-color: #059669; }   /* emerald */
 .render-block.queryrule { border-color: #f59e0b; }  /* amber */
 
+/* =========================
+   Collapsible Indicators
+   ========================= */
+
+details.indicator-collapse {
+  margin: 6px 0 10px;
+}
+
+details.indicator-collapse > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: #eef2ff;   /* light indigo */
+  color: #1e3a8a;
+}
+
+details.indicator-collapse[open] > summary {
+  background: #e0e7ff;
+}
+
+details.indicator-collapse summary::-webkit-details-marker {
+  color: #4f46e5;
+}
 
 /* =========================
    Meta Table (Headers)

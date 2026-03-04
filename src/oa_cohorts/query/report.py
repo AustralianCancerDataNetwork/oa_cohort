@@ -149,12 +149,12 @@ class Report(HTMLRenderable, Base):
     def cohort_measures(self):
         return list(set(chain.from_iterable([c.measures for c in self.report_cohorts])))
 
-    @property
-    def report_measures(self):
-        return sorted(
-            set(self.numerator_measures + self.denominator_measures + self.cohort_measures),
-            key=lambda x: x.id,
-        )
+    # @property
+    # def report_measures(self):
+    #     return sorted(
+    #         set(self.numerator_measures + self.denominator_measures + self.cohort_measures),
+    #         key=lambda x: x.id,
+    #     )
     
     @property
     def members(self):
@@ -193,7 +193,7 @@ class Report(HTMLRenderable, Base):
         from .measure import MeasureExecutor
 
         executor = MeasureExecutor(db)
-        for m in self.report_measures:
+        for m in self.indicator_measures + self.cohort_measures:
             if m.measure_id == 0:
                 continue
             try:
@@ -206,12 +206,12 @@ class Report(HTMLRenderable, Base):
                     raise
 
         cohort_members = self.members
-        for m in self.report_measures:
+        for m in self.indicator_measures:
             if m.measure_id == 0:
                 m._members = cohort_members
 
     def assert_executed(self):
-        for m in self.report_measures:
+        for m in self.indicator_measures + self.cohort_measures:
             if m.measure_id != 0 and m._members is None:
                 raise RuntimeError(f"Measure {m.measure_id} not executed")
 
@@ -258,8 +258,19 @@ class Report(HTMLRenderable, Base):
         
         # Indicators
         blocks.append(RawHTML("<div class='subquery-section-title'>Indicators</div>"))
+
         if self.indicators:
-            blocks.extend(sorted(self.indicators))
+            for ind in sorted(self.indicators):
+                blocks.append(
+                    RawHTML("<details class='indicator-collapse'>")
+                )
+                blocks.append(
+                    RawHTML(
+                        f"<summary><b>{esc(ind.indicator_description)}</b></summary>"
+                    )
+                )
+                blocks.append(ind)
+                blocks.append(RawHTML("</details>"))
         else:
             blocks.append(RawHTML("<div class='muted'><i>No indicators</i></div>"))
 

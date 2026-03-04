@@ -32,7 +32,7 @@ class ReportRunner:
         Executes all measures needed for this report.
         """
         # 1. Preflight compile
-        for m in self.report.report_measures:
+        for m in self.report.indicator_measures + self.report.cohort_measures:
             plan = QueryPlan(root=MeasureNode(m))
             _ = plan.root.sql_any()
 
@@ -41,13 +41,13 @@ class ReportRunner:
 
     def build_plans(self) -> dict[int, QueryPlan]:
         if not self._plans:
-            for m in self.report.report_measures:
+            for m in self.report.indicator_measures + self.report.cohort_measures:
                 self._plans[m.measure_id] = QueryPlan(root=MeasureNode(m))
         return self._plans
 
     def all_plan_measures(self) -> set[int]:
         ids = set()
-        for m in self.report.report_measures:
+        for m in self.report.indicator_measures + self.report.cohort_measures:
             plan = QueryPlan(root=MeasureNode(m))
             for mm in plan.root.iter_measures():
                 ids.add(mm.measure_id)
