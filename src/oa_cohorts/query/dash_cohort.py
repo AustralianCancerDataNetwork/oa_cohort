@@ -10,7 +10,7 @@ from ..core.html_utils import HTMLRenderable, RawHTML
 from ..core.executability import ExecStatus, MeasureExecCheck
 
 if TYPE_CHECKING:
-    from .measure import Measure, MeasureMember
+    from .measure import Measure, MeasureMember, MeasureExecutor
     from .report import ReportCohortMap
 
 from sqlalchemy.engine import Row as SARow
@@ -58,15 +58,14 @@ class DashCohortDef(HTMLRenderable, Base):
         lazy="joined",
     )
 
-    @property
-    def members(self) -> Sequence["MeasureMember"]:
+    def members(self, executor: MeasureExecutor) -> Sequence["MeasureMember"]:
         """
         Members of a cohort definition are exactly the members of its backing measure.
         Assumes the measure has already been executed.
         """
         if not self.dash_cohort_measure:
             return ()
-        return self.dash_cohort_measure.members
+        return self.dash_cohort_measure.members(executor)
 
     def get_cohort(self):
         return self.dash_cohort_measure
@@ -159,13 +158,12 @@ class DashCohort(HTMLRenderable, Base):
             for d in self.definitions
         ]
 
-    @property
-    def members(self) -> Sequence["MeasureMember"]:
+    def members(self, executor: MeasureExecutor) -> Sequence["MeasureMember"]:
         seen = set()
         out: list[MeasureMember] = []
 
         for d in self.definitions:
-            for row in d.members:
+            for row in d.members(executor):
                 if row not in seen:
                     seen.add(row)
                     out.append(row)

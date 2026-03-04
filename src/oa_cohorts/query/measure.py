@@ -43,7 +43,6 @@ class MeasureMember:
             episode_id=getattr(r, "episode_id", None),
             measure_date=getattr(r, "measure_date", None),
         )
-    
 
 
 class Measure(HTMLRenderable, Base):
@@ -103,16 +102,19 @@ class Measure(HTMLRenderable, Base):
         lazy="selectin",
     )
 
-    _members: Sequence[MeasureMember] | None = None
+    def members(self, executor: MeasureExecutor):
+        return executor.members(self)
 
-    @property
-    def members(self) -> Sequence[MeasureMember]:
-        if self._members is None:
-            raise RuntimeError(
-                f"Measure {self.measure_id} ('{self.name}') has not been executed yet. "
-                "Call MeasureExecutor.execute(measure) before accessing members."
-            )
-        return self._members
+    # _members: Sequence[MeasureMember] | None = None
+
+    # @property
+    # def members(self) -> Sequence[MeasureMember]:
+    #     if self._members is None:
+    #         raise RuntimeError(
+    #             f"Measure {self.measure_id} ('{self.name}') has not been executed yet. "
+    #             "Call MeasureExecutor.execute(measure) before accessing members."
+    #         )
+    #     return self._members
 
     @property
     def children(self) -> list["Measure"]:
@@ -509,7 +511,7 @@ class MeasureExecutor:
             )
         if not force_refresh and measure.measure_id in self._cache:
             rows = self._cache[measure.measure_id]
-            measure._members = rows
+            #measure._members = rows
             return rows
         
         sql = MeasureSQLCompiler(measure).sql_any(ep_override=ep_override)
@@ -521,5 +523,14 @@ class MeasureExecutor:
         rows = self.db.execute(sql).all()
         rows_typed = [MeasureMember.from_row(r) for r in rows]
         self._cache[measure.measure_id] = rows_typed
-        measure._members = rows_typed
-        return measure._members
+        #measure._members = rows_typed
+        return rows_typed
+    
+    def members(self, measure: Measure) -> Sequence[MeasureMember]:
+        try:
+            return self._cache[measure.measure_id]
+        except KeyError:
+            raise RuntimeError(
+                f"Measure {measure.measure_id} ('{measure.name}') "
+                "has not been executed yet."
+            )

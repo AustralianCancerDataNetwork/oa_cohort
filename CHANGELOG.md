@@ -37,3 +37,6 @@
 
 ## 0.2.8
 - report.report_measures property removed
+
+## 0.3.0
+- changed ownership of membership caching to the execution layer to avoid confusion in python objects pointing to same measure rows not sharing cached execution results

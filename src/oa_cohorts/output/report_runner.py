@@ -4,6 +4,7 @@ import sqlalchemy.orm as so
 from typing import Sequence
 from ..query.typing import Row
 from ..query.report import Report
+from ..query.measure import MeasureExecutor
 from .person_demography import DemographyFilter
 from .query_plan import QueryPlan, MeasureNode
 from .report_payload import ReportBundle, PivotCohortRow, PivotIndicatorRow
@@ -26,6 +27,7 @@ class ReportRunner:
         self._cohort_rows: list[PivotCohortRow] | None = None
         self._indicator_rows: list[PivotIndicatorRow] | None = None
         self._plans: dict[int, QueryPlan] = {}
+        self._executor = MeasureExecutor(db)
 
     def execute(self, *, people: list[int] | None = None, strict: bool = True) -> None:
         """
@@ -56,7 +58,7 @@ class ReportRunner:
     def collect_demography(self):
         self.report.assert_executed()
 
-        cohort_person_ids = [m.person_id for m in self.report.members]
+        cohort_person_ids = [m.person_id for m in self.report.members(self._executor)]
 
         demo_filter = DemographyFilter()
 
@@ -71,14 +73,14 @@ class ReportRunner:
         """
         Build cohort × measure pivot rows from executed Measure.members.
         """
-        self._cohort_rows = build_pivot_cohort(self.report)
+        self._cohort_rows = build_pivot_cohort(self.report, executor=self._executor)
         return self._cohort_rows
 
     def collect_pivot_indicators(self):
         """
         Build indicator pivot rows from executed Measure.members.
         """
-        self._indicator_rows = build_pivot_indicators(self.report)
+        self._indicator_rows = build_pivot_indicators(self.report, executor=self._executor)
         return self._indicator_rows
     
     def build_bundle(self) -> ReportBundle:
@@ -96,7 +98,7 @@ class ReportRunner:
         assert self._indicator_rows is not None
 
         return ReportBundle(
-            report=build_report_payload(self.report),
+            report=build_report_payload(self.report, self._executor),
             cohort_demography=build_cohort_demography(self._demography_rows),
             pivot_cohort=self._cohort_rows,
             pivot_indicators=self._indicator_rows,

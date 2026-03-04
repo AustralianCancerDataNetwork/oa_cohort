@@ -1,6 +1,7 @@
 from typing import Sequence
 from ..query.report import Report
 from ..query.typing import Row
+from ..query.measure import MeasureExecutor
 from .report_payload import (
     DashCohortDefinitionPayload, 
     DashCohortPayload, 
@@ -34,12 +35,12 @@ def build_cohort_demography(rows: Sequence[Row]) -> list[CohortDemographyRow]:
     return out
 
 
-def build_pivot_indicators(report: Report) -> list[PivotIndicatorRow]:
+def build_pivot_indicators(report: Report, executor: MeasureExecutor) -> list[PivotIndicatorRow]:
     rows: list[PivotIndicatorRow] = []
 
     for ind in report.indicators:
-        num = {mm for mm in ind.numerator_members}
-        den = {mm for mm in ind.denominator_members}
+        num = {mm for mm in ind.numerator_members(executor)}
+        den = {mm for mm in ind.denominator_members(executor)}
 
         for mm in num & den:
             rows.append(
@@ -58,7 +59,7 @@ def build_pivot_indicators(report: Report) -> list[PivotIndicatorRow]:
 
     return rows
 
-def build_pivot_cohort(report: Report) -> list[PivotCohortRow]:
+def build_pivot_cohort(report: Report, executor: MeasureExecutor) -> list[PivotCohortRow]:
     rows: list[PivotCohortRow] = []
 
     for rc in report.cohorts:
@@ -69,7 +70,7 @@ def build_pivot_cohort(report: Report) -> list[PivotCohortRow]:
             if not m:
                 continue
 
-            for mm in m.members:
+            for mm in m.members(executor):
                 rows.append(
                     PivotCohortRow(
                         episode_id=mm.episode_id,
@@ -84,7 +85,7 @@ def build_pivot_cohort(report: Report) -> list[PivotCohortRow]:
 
     return rows
 
-def build_cohort_payloads(report: Report) -> list[DashCohortPayload]:
+def build_cohort_payloads(report: Report, executor: MeasureExecutor) -> list[DashCohortPayload]:
     out = []
 
     for rc in report.cohorts:
@@ -93,7 +94,7 @@ def build_cohort_payloads(report: Report) -> list[DashCohortPayload]:
 
         for d in cohort.definitions:
             m = d.dash_cohort_measure
-            member_ids = [mm.person_id for mm in m.members] if m else []
+            member_ids = [mm.person_id for mm in m.members(executor)] if m else []
 
             defs.append(
                 DashCohortDefinitionPayload(
@@ -116,7 +117,7 @@ def build_cohort_payloads(report: Report) -> list[DashCohortPayload]:
     return out
 
 
-def build_report_payload(report: Report) -> ReportPayload:
+def build_report_payload(report: Report, executor: MeasureExecutor) -> ReportPayload:
     return ReportPayload(
         report_name=report.report_name,
         report_short_name=report.report_short_name,
@@ -141,7 +142,7 @@ def build_report_payload(report: Report) -> ReportPayload:
             )
             for ind in report.indicators
         ],
-        report_cohorts=build_cohort_payloads(report),
+        report_cohorts=build_cohort_payloads(report, executor=executor),
         report_measures=[
             ReportMeasurePayload(
                 measure_id=m.measure_id,

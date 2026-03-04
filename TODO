@@ -1,0 +1,3 @@
+[] safe cleanup for repeated entries in mapper tables
+[] logic checks like 'existing concepts'
+[x] remove reliance on execution status within the ORM - cache needs to be only on the executor else we get conflict - need to guarantee measures of same ID will have same execution status / same membership

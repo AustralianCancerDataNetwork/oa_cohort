@@ -6,7 +6,7 @@ from orm_loader.helpers import Base
 from ..core import RuleTemporality
 from ..core.html_utils import HTMLRenderable, RawHTML, esc
 from .report import Report, report_indicator_map
-from .measure import Measure, MeasureMember
+from .measure import Measure, MeasureMember, MeasureExecutor
 from .typing import Row
 from ..core.executability import ExecStatus, IndicatorExecCheck
 
@@ -85,27 +85,25 @@ class Indicator(HTMLRenderable, Base):
             people=people,
         )
 
-    @property
-    def numerator_members(self) -> Sequence[MeasureMember]:
+    def numerator_members(self, executor: MeasureExecutor) -> Sequence[MeasureMember]:
         """
         Members of the numerator cohort (delegates to numerator measure).
-        
+
         Returns only those members who are also in the denominator cohort, as per indicator definition
         (i.e. I do not care about the numerator event for members not in the denominator).
         
         Assumes the numerator measure has been executed.
         """
-        num = set(self.numerator_measure.members)
-        den = set(self.denominator_measure.members)
+        num = set(self.numerator_measure.members(executor))
+        den = set(self.denominator_measure.members(executor))
         return list(num & den)
 
-    @property
-    def denominator_members(self) -> Sequence[MeasureMember]:
+    def denominator_members(self, executor: MeasureExecutor) -> Sequence[MeasureMember]:
         """
         Members of the denominator cohort (delegates to denominator measure).
         Assumes the denominator measure has been executed.
         """
-        return self.denominator_measure.members
+        return self.denominator_measure.members(executor)
 
     def __lt__(self, other):
         if self.indicator_id != other.indicator_id:

@@ -1,17 +1,20 @@
 from __future__ import annotations
 from datetime import date
 from itertools import chain
+
 import sqlalchemy as sa
 import sqlalchemy.orm as so
 from sqlalchemy.ext.hybrid import hybrid_property
 from orm_loader.helpers import Base, get_logger
 from sqlalchemy.ext.associationproxy import association_proxy
+
+from oa_cohorts.query.measure import MeasureMember, MeasureExecutor
 from ..core.html_utils import HTMLRenderable, RawHTML, esc, td, exec_badge, table
 from ..core import ReportStatus
 from ..core.executability import ExecStatus
 from .typing import PersonFilter
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 if TYPE_CHECKING:
     from .indicator import Indicator
     from .dash_cohort import DashCohort
@@ -156,10 +159,8 @@ class Report(HTMLRenderable, Base):
     #         key=lambda x: x.id,
     #     )
     
-    @property
-    def members(self):
-        return list(set(chain.from_iterable([c.members for c in self.report_cohorts])))
-
+    def members(self, executor: MeasureExecutor) -> Sequence["MeasureMember"]:
+        return list(set(chain.from_iterable([c.members(executor) for c in self.report_cohorts])))
 
     def execute(
             self, 
