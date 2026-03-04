@@ -74,7 +74,7 @@ class ReportRunner:
             restrict_to_person_ids=cohort_person_ids
         )
 
-        self._demography_rows = self.db.execute(stmt).all()
+        self._demography_rows = self.db.execute(stmt).scalars().all()
         return self._demography_rows
 
     def collect_pivot_cohort(self, strict: bool = True) -> list[PivotCohortRow]:

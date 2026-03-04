@@ -13,12 +13,11 @@ from .report_payload import (
     PivotCohortRow,
     ReportMeasurePayload
 )
+from omop_constructs.alchemy.demography import PersonDemography
 
-def build_cohort_demography(rows: Sequence[Row]) -> list[CohortDemographyRow]:
+def build_cohort_demography(rows: Sequence[PersonDemography]) -> list[CohortDemographyRow]:
     out: list[CohortDemographyRow] = []
-
     for r in rows:
-        # If your select is just PersonDemography.*, r will already expose fields
         out.append(
             CohortDemographyRow(
                 person_id=r.person_id,
@@ -49,7 +48,7 @@ def build_pivot_indicators(report: Report, executor: MeasureExecutor, strict: bo
                         person_id=mm.person_id,
                         measure_resolver=mm.measure_resolver,
                         numerator_date=mm.measure_date,
-                        denominator_date=mm.measure_date,  # or pull from den if you later preserve both
+                        denominator_date=mm.measure_date,  
                         numerator_measure_id=ind.numerator_measure.measure_id,
                         denominator_measure_id=ind.denominator_measure.measure_id,
                         indicator=ind.indicator_id,

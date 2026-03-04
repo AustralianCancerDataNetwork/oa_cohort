@@ -55,3 +55,6 @@
 
 ## 0.3.5
 - passing corrected executor to report object
+
+## 0.3.6
+- changing return typing around demography
