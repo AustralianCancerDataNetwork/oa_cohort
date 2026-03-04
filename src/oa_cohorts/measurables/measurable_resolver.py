@@ -15,7 +15,9 @@ def get_measurable_registry() -> dict[RuleTarget, Type[MeasurableBase]]:
         ChemoTreatmentMeasurable,
         RTTreatmentMeasurable,
         IntentChemoMeasurable,
-        IntentRTMeasurable
+        IntentRTMeasurable,
+        TxDaysBeforeDeath,
+        TxDaysToStartTreatment
     )
 
     from .ev_measureables import (
@@ -42,5 +44,7 @@ def get_measurable_registry() -> dict[RuleTarget, Type[MeasurableBase]]:
         RuleTarget.tx_radiotherapy: RTTreatmentMeasurable,
         RuleTarget.intent_sact: IntentChemoMeasurable,
         RuleTarget.intent_rt: IntentRTMeasurable,
-        RuleTarget.demog_death: DeathMeasurable
+        RuleTarget.demog_death: DeathMeasurable,
+        RuleTarget.tx_to_death_window: TxDaysBeforeDeath,
+        RuleTarget.dx_to_tx_window: TxDaysToStartTreatment
     }

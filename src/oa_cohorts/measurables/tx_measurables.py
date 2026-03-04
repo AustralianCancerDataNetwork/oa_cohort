@@ -1,4 +1,4 @@
-from omop_constructs.alchemy.episodes import SurgicalProcedureMV, DxTreatStartMV, ConditionTreatmentEpisode
+from omop_constructs.alchemy.episodes import SurgicalProcedureMV, DxTreatStartMV, ConditionTreatmentEpisode, TreatmentEnvelopeMV
 from orm_loader.helpers import Base, get_logger
 from .measurable_base import MeasurableSpec, MeasurableBase, MeasurableDomain
 
@@ -67,4 +67,24 @@ class IntentRTMeasurable(ConditionTreatmentEpisode, MeasurableBase, Base):
         event_date_attr="course_start_date",
         value_concept_attr="rt_intent_concept_id",   
         value_string_attr="rt_intent_concept"
+    )
+
+class TxDaysBeforeDeath(TreatmentEnvelopeMV, MeasurableBase, Base):
+    __measurable__ = MeasurableSpec(
+        domain=MeasurableDomain.tx,
+        label="Treatment Days Before Death",
+        person_id_attr="person_id",
+        episode_id_attr="condition_episode",
+        event_date_attr="condition_start_date",
+        value_numeric_attr="treatment_days_before_death"
+    )
+
+class TxDaysToStartTreatment(TreatmentEnvelopeMV, MeasurableBase, Base):
+    __measurable__ = MeasurableSpec(
+        domain=MeasurableDomain.tx,
+        label="Treatment Days To Start Treatment",
+        person_id_attr="person_id",
+        episode_id_attr="condition_episode",
+        event_date_attr="condition_start_date",
+        value_numeric_attr="days_from_dx_to_treatment"
     )
