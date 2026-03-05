@@ -14,6 +14,7 @@ from .pivot_queries import (
     build_cohort_demography,
     build_report_payload
 )
+from omop_constructs.alchemy.demography import PersonDemography
 
 class ReportRunner:
     """
@@ -23,7 +24,7 @@ class ReportRunner:
     def __init__(self, db: so.Session, report: Report):
         self.db = db
         self.report = report
-        self._demography_rows: Sequence[Row] | None = None
+        self._demography_rows: Sequence[PersonDemography] | None = None
         self._cohort_rows: list[PivotCohortRow] | None = None
         self._indicator_rows: list[PivotIndicatorRow] | None = None
         self._plans: dict[int, QueryPlan] = {}
@@ -60,7 +61,7 @@ class ReportRunner:
                 ids.add(mm.measure_id)
         return ids
 
-    def collect_demography(self, strict: bool = True) -> Sequence[Row]:
+    def collect_demography(self, strict: bool = True) -> Sequence[PersonDemography]:
         # we can tolerate some indicator execution failures but we do not support
         # cohorts with failed execution, so strict only covers assertion step here
         if strict:

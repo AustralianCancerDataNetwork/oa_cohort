@@ -59,6 +59,10 @@ class QueryRule(Base, HTMLRenderable):
     @property
     def requires_string(self) -> bool:
         return self.matcher == RuleMatcher.substring
+    
+    @property
+    def requires_predicate(self) -> bool:
+        return self.matcher == RuleMatcher.predicate
 
     def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
         """
@@ -406,6 +410,55 @@ class ScalarRule(QueryRule):
             bits.append(RawHTML(f"<div><b>Target:</b> {self.threshold_comparator.value}</div>"))
 
         return bits
+    
+class PredicateRule(QueryRule):
+    """
+    Rule implementing boolean predicate matching.
+
+    Predicate rules operate on measurable classes that expose a boolean
+    predicate column (e.g. rt, sact, metastatic_flag). This allows filtering
+    directly on derived clinical indicators without requiring concept or
+    scalar comparisons.
+
+    Clinically this supports constructs such as:
+        - "episode includes radiotherapy"
+        - "treatment is systemic therapy"
+        - "disease is metastatic"
+    """
+
+    __mapper_args__ = {
+        "polymorphic_identity": RuleMatcher.predicate,
+    }
+
+    @property
+    def comparator(self) -> bool:
+        """
+        Whether the predicate must evaluate to TRUE or FALSE.
+
+        Default behaviour:
+            concept_id = 1: predicate must be TRUE
+            concept_id = 0: predicate must be FALSE
+        """
+        if self.concept_id is None:
+            return True
+        return bool(self.concept_id)
+
+    def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
+        """
+        Apply predicate match.
+
+        field is expected to be a boolean SQL column.
+        """
+        if self.comparator:
+            return field.is_(True)
+        else:
+            return field.is_(False)
+
+    def _html_inner(self):
+        state = "TRUE" if self.comparator else "FALSE"
+        return [
+            RawHTML(f"<div><b>Predicate:</b> {state}</div>")
+        ]
 
 class PhenotypeRule(QueryRule):
     """

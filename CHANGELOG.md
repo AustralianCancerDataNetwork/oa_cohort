@@ -85,3 +85,9 @@
 
 ## 0.3.16
 - upversion constructs
+
+## 0.3.17
+- gotta actually save it
+
+## 0.3.18
+- predicate rule

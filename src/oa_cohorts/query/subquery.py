@@ -72,6 +72,7 @@ class Subquery(HTMLRenderable, Base):
         """
         use_numeric = any(r.requires_numeric for r in self.rules)
         use_string = any(r.requires_string for r in self.rules) 
+        use_predicate = any(r.requires_predicate for r in self.rules)
         specs = measurable.__bound_measurable__
 
         col = specs.value_concept_col
@@ -86,6 +87,9 @@ class Subquery(HTMLRenderable, Base):
             col = specs.value_string_col
             val_col = specs.value_string_col
             kind = "string"
+        elif use_predicate:
+            val_col = specs.value_predicate_col
+            kind = "predicate"
         else:
             val_col = specs.value_concept_col
             kind = "concept"

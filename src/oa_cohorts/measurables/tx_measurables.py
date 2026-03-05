@@ -50,23 +50,23 @@ class RTTreatmentMeasurable(ConditionTreatmentEpisode, MeasurableBase, Base):
 class IntentChemoMeasurable(ConditionTreatmentIntentMV, MeasurableBase, Base):
     __measurable__ = MeasurableSpec(
         domain=MeasurableDomain.tx,
-        label="Intent of Chemotherapy Treatment Episodes",
+        label="Specified Intent of Chemotherapy Treatment Episodes",
         person_id_attr="person_id",
         episode_id_attr="episode_id",
         event_date_attr="treatment_episode_start_date",
         value_concept_attr="treatment_intent_concept_id",   
-        value_string_attr="sact"
+        value_predicate_attr="sact"
     )
 
 class IntentRTMeasurable(ConditionTreatmentIntentMV, MeasurableBase, Base):
     __measurable__ = MeasurableSpec(
         domain=MeasurableDomain.tx,
-        label="Intent of Radiotherapy Treatment Episodes",
+        label="Specified Intent of Radiotherapy Treatment Episodes",
         person_id_attr="person_id",
         episode_id_attr="episode_id",
         event_date_attr="treatment_episode_start_date",
         value_concept_attr="treatment_intent_concept_id",   
-        value_string_attr="rt"
+        value_predicate_attr="rt"
     )
 
 class TxDaysBeforeDeath(TreatmentEnvelopeMV, MeasurableBase, Base):

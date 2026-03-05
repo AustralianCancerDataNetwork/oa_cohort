@@ -9,6 +9,7 @@ class RuleMatcher(str, enum.Enum):
     hierarchyexclusion = 'hierarchyexclusion'
     scalar = 'scalar' 
     phenotype = 'phenotype' 
+    predicate = 'predicate'
     
 class RuleTemporality(str, enum.Enum):
     dt_any = "dt_any"
