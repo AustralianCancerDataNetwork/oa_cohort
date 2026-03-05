@@ -98,3 +98,5 @@
 ## 0.3.20
 - updated predicate rule
 
+## 0.3.21
+- upversion constructs
