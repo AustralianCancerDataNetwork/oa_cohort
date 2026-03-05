@@ -1,4 +1,4 @@
-from omop_constructs.alchemy.episodes import SurgicalProcedureMV, DxTreatStartMV, ConditionTreatmentEpisode, TreatmentEnvelopeMV
+from omop_constructs.alchemy.episodes import SurgicalProcedureMV, DxTreatStartMV, ConditionTreatmentEpisode, TreatmentEnvelopeMV, ConditionTreatmentIntentMV
 from orm_loader.helpers import Base, get_logger
 from .measurable_base import MeasurableSpec, MeasurableBase, MeasurableDomain
 
@@ -47,26 +47,26 @@ class RTTreatmentMeasurable(ConditionTreatmentEpisode, MeasurableBase, Base):
         value_string_attr="course_concept" 
     )
 
-class IntentChemoMeasurable(ConditionTreatmentEpisode, MeasurableBase, Base):
+class IntentChemoMeasurable(ConditionTreatmentIntentMV, MeasurableBase, Base):
     __measurable__ = MeasurableSpec(
         domain=MeasurableDomain.tx,
         label="Intent of Chemotherapy Treatment Episodes",
         person_id_attr="person_id",
-        episode_id_attr="condition_episode_id",
-        event_date_attr="regimen_start_date",
-        value_concept_attr="sact_intent_concept_id",   
-        value_string_attr="sact_intent_concept"
+        episode_id_attr="episode_id",
+        event_date_attr="treatment_episode_start_date",
+        value_concept_attr="treatment_intent_concept_id",   
+        value_string_attr="sact"
     )
 
-class IntentRTMeasurable(ConditionTreatmentEpisode, MeasurableBase, Base):
+class IntentRTMeasurable(ConditionTreatmentIntentMV, MeasurableBase, Base):
     __measurable__ = MeasurableSpec(
         domain=MeasurableDomain.tx,
         label="Intent of Radiotherapy Treatment Episodes",
         person_id_attr="person_id",
-        episode_id_attr="condition_episode_id",
-        event_date_attr="course_start_date",
-        value_concept_attr="rt_intent_concept_id",   
-        value_string_attr="rt_intent_concept"
+        episode_id_attr="episode_id",
+        event_date_attr="treatment_episode_start_date",
+        value_concept_attr="treatment_intent_concept_id",   
+        value_string_attr="rt"
     )
 
 class TxDaysBeforeDeath(TreatmentEnvelopeMV, MeasurableBase, Base):

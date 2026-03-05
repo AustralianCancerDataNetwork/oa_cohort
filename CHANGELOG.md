@@ -70,3 +70,6 @@
 
 ## 0.3.10
 - days tx to death / dx to tx
+
+## 0.3.12
+- treatment intent
