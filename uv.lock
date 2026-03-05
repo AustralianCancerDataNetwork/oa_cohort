@@ -1306,7 +1306,7 @@ wheels = [
 
 [[package]]
 name = "oa-cohorts"
-version = "0.3.12"
+version = "0.3.13"
 source = { editable = "." }
 dependencies = [
     { name = "omop-constructs" },
@@ -1339,7 +1339,7 @@ requires-dist = [
     { name = "mkdocstrings-python", marker = "extra == 'dev'", specifier = ">=2.0.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
     { name = "myst-parser", marker = "extra == 'docs'" },
-    { name = "omop-constructs", specifier = ">=0.3.18" },
+    { name = "omop-constructs", specifier = ">=0.3.19" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "rich", marker = "extra == 'dev'", specifier = ">=13.0" },
@@ -1366,7 +1366,7 @@ wheels = [
 
 [[package]]
 name = "omop-constructs"
-version = "0.3.18"
+version = "0.3.19"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "omop-alchemy" },
@@ -1375,9 +1375,9 @@ dependencies = [
     { name = "sqlalchemy" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f2/fc/5143a936370620fcbf6189944f3afcb2f51d7f8bf308a01a29ac390befef/omop_constructs-0.3.18.tar.gz", hash = "sha256:14b68870df1c4dd1b6faebe17ac26813a550ef52b3635ec4e268169f06ce3182", size = 25738, upload-time = "2026-03-05T10:05:29.153Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/34/6a/b954887da85d61a53f3ccb9c2dfe2ebc6210935e6c76c5333e021bf0959e/omop_constructs-0.3.19.tar.gz", hash = "sha256:2c6f20c19c211445b9aa3dbfe23d2c2fc9b44d59348f84736bdf688d13cd5373", size = 25736, upload-time = "2026-03-05T10:29:35.852Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f1/bb/79f776dfa7e031e17b0f9d168ca3dd32594892c964973fe7b7d426cc183a/omop_constructs-0.3.18-py3-none-any.whl", hash = "sha256:175639857724ebb6d2e5dd29c035c3da6c8cd4b376034964b63695cb1412eeb5", size = 53250, upload-time = "2026-03-05T10:05:27.738Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/a6/c8be607a20f49566b2ece69cc948198c1c3563e48a434d224a44d5fa3cb9/omop_constructs-0.3.19-py3-none-any.whl", hash = "sha256:dce4e57c7438c5e0d7dfecd9179694b78e350e185762e8b7b9fcd2522711c700", size = 53251, upload-time = "2026-03-05T10:29:34.449Z" },
 ]
 
 [[package]]
