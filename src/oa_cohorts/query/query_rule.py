@@ -442,6 +442,31 @@ class PredicateRule(QueryRule):
         if self.concept_id is None:
             return True
         return bool(self.concept_id)
+    
+
+    @property
+    def predicate_field(self):
+        """
+        Resolve the boolean predicate column associated with the target measurable.
+
+        This indirection allows predicate rules to remain declarative while supporting
+        different predicate fields depending on the clinical domain (e.g.
+        measurement.value_as_number, derived episode-level modifiers, etc.).
+
+        Returns
+        -------
+        A SQLAlchemy column representing the boolean predicate to compare against.
+        """
+        if self.threshold_comparator is None:
+            raise RuntimeError(f'Threshold comparator is not set on rule {self.query_rule_id}')
+        measurable = get_measurable_registry()[self.threshold_comparator]
+        col = measurable.__bound_measurable__.value_predicate_col
+        if col is None:
+            raise RuntimeError(
+                f"{measurable.__name__} does not expose a boolean predicate column"
+            )
+        return col
+
 
     def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
         """
@@ -449,10 +474,11 @@ class PredicateRule(QueryRule):
 
         field is expected to be a boolean SQL column.
         """
+        pred = self.predicate_field.is_(True)
         if self.comparator:
-            return field.is_(True)
+            return pred and field == self.comparator
         else:
-            return field.is_(False)
+            return pred
 
     def _html_inner(self):
         state = "TRUE" if self.comparator else "FALSE"
