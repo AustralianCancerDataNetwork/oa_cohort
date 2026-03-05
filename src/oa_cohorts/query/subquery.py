@@ -89,6 +89,7 @@ class Subquery(HTMLRenderable, Base):
             kind = "string"
         elif use_predicate:
             val_col = specs.value_predicate_col
+            col = val_col
             kind = "predicate"
         else:
             val_col = specs.value_concept_col

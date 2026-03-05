@@ -94,3 +94,7 @@
 
 ## 0.3.19
 - updated predicate rule
+
+## 0.3.20
+- updated predicate rule
+
