@@ -103,3 +103,7 @@
 
 ## 0.3.22
 - upversion constructs
+
+## 0.4.0
+- configuration interface
+- fixed full-cohort resolution
