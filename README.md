@@ -41,3 +41,18 @@ indicators = report.indicators     # output rows are built per denominator membe
 ### Status
 
 This is a working internal engine under active development. APIs may shift.
+
+## Docker
+
+The repo includes a lightweight CLI container under `docker/docker-compose.yaml` that joins the external `cava-network` and expects an `ENGINE` SQLAlchemy URL.
+
+Example:
+
+```bash
+cd docker
+docker compose up -d oa-cohorts
+docker compose exec oa-cohorts oa-cohorts --help
+docker compose exec oa-cohorts oa-cohorts import-config /app/dash_config
+```
+
+The database host in `ENGINE` should be reachable on `cava-network`, for example `postgresql+psycopg2://user:password@postgres:5432/dbname`.

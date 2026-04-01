@@ -9,7 +9,12 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "omop-constructs>=0.3.24",
+    "rich>=13.0",
+    "typer>=0.12",
 ]
+
+[project.scripts]
+oa-cohorts = "oa_cohorts.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.9.2,<0.10.0"]
@@ -25,7 +30,6 @@ dev = [
   "pytest-cov>=4.0",
   "mypy>=1.8",
   "ruff>=0.4",
-  "rich>=13.0",
   "mkdocs-material>=9.7.1",
   "mkdocstrings-python>=2.0.1",
   "mkdocs>=1.6.1",

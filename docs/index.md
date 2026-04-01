@@ -50,7 +50,7 @@ This structure mirrors the way clinical quality is reported in practice: first i
 
 At execution time, both numerator and denominator measures must be executable. Each resolves independently into a set of `MeasureMember` objects, preserving episode alignment and qualification dates. For report output, indicator rows are emitted per denominator member within the report cohort, with numerator qualification evaluated against that denominator row.
 
-Numerator and denominator each retain their own qualification dates. Report payloads preserve `denominator_date` from the denominator event and `numerator_date` from the matched numerator event for the same person and resolver. This allows reporting logic to apply temporal comparators at the report layer, rather than embedding window constraints directly into measure definitions.
+Numerator and denominator each retain their own qualification dates. Report payloads preserve `denominator_date` from the denominator event and `numerator_date` from the matched numerator event for the same person and resolver. When the denominator is the full report cohort (`measure_id = 0`), final payload assembly resolves numerator truth at the person level so a qualifying numerator linked to one in-scope episode does not create failure rows for that same person’s other in-scope episodes. This allows reporting logic to apply temporal comparators at the report layer, rather than embedding window constraints directly into measure definitions.
 
 Indicators often depend on temporal relationships between events.
 

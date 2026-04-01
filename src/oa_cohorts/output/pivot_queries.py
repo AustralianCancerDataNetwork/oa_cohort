@@ -67,6 +67,43 @@ def _pick_earliest_date(current: date | None, candidate: date | None) -> date | 
     return min(current, candidate)
 
 
+def _build_person_resolved_numerator_dates(
+    members: Sequence[MeasureMember],
+    *,
+    valid_people: set[int],
+) -> dict[int, date | None]:
+    numerator_dates: dict[int, date | None] = {}
+
+    for member in members:
+        if member.person_id not in valid_people:
+            continue
+        numerator_dates[member.person_id] = _pick_earliest_date(
+            numerator_dates.get(member.person_id),
+            _coerce_date(member.measure_date),
+        )
+
+    return numerator_dates
+
+
+def _build_resolver_resolved_numerator_dates(
+    members: Sequence[MeasureMember],
+    *,
+    valid_keys: set[tuple[int, int]],
+) -> dict[tuple[int, int], date | None]:
+    numerator_dates: dict[tuple[int, int], date | None] = {}
+
+    for member in members:
+        key = (member.person_id, member.measure_resolver)
+        if key not in valid_keys:
+            continue
+        numerator_dates[key] = _pick_earliest_date(
+            numerator_dates.get(key),
+            _coerce_date(member.measure_date),
+        )
+
+    return numerator_dates
+
+
 def build_cohort_demography(rows: Sequence[PersonDemography]) -> list[CohortDemographyRow]:
     out: list[CohortDemographyRow] = []
     for r in rows:
@@ -100,40 +137,47 @@ def build_pivot_indicators(
         try:
             if ind.denominator_measure_id == 0:
                 denominator_members = _dedupe_members(resolved_cohort_members)
+                numerator_dates_by_person = _build_person_resolved_numerator_dates(
+                    ind.numerator_measure.members(executor),
+                    valid_people={member.person_id for member in denominator_members},
+                )
             else:
                 denominator_members = _dedupe_members([
                     mm
                     for mm in ind.denominator_measure.members(executor)
                     if mm.measure_resolver in cohort_resolvers and mm.measure_date is not None
                 ])
-
-            denominator_keys = {
-                (member.person_id, member.measure_resolver)
-                for member in denominator_members
-            }
-            numerator_dates: dict[tuple[int, int], date | None] = {}
-
-            for member in ind.numerator_measure.members(executor):
-                key = (member.person_id, member.measure_resolver)
-                if key not in denominator_keys:
-                    continue
-                numerator_dates[key] = _pick_earliest_date(
-                    numerator_dates.get(key),
-                    _coerce_date(member.measure_date),
+                numerator_dates_by_key = _build_resolver_resolved_numerator_dates(
+                    ind.numerator_measure.members(executor),
+                    valid_keys={
+                        (member.person_id, member.measure_resolver)
+                        for member in denominator_members
+                    },
                 )
 
             for mm in denominator_members:
-                key = (mm.person_id, mm.measure_resolver)
+                # Whole-cohort denominators should not emit both "pass" and "fail"
+                # rows for the same person when a numerator event is linked to only
+                # one of several in-scope episodes. Explicit denominators stay
+                # resolver-specific.
+                if ind.denominator_measure_id == 0:
+                    numerator_date = numerator_dates_by_person.get(mm.person_id)
+                    numerator_value = mm.person_id in numerator_dates_by_person
+                else:
+                    key = (mm.person_id, mm.measure_resolver)
+                    numerator_date = numerator_dates_by_key.get(key)
+                    numerator_value = key in numerator_dates_by_key
+
                 rows.append(
                     PivotIndicatorRow(
                         person_id=mm.person_id,
                         measure_resolver=mm.measure_resolver,
-                        numerator_date=numerator_dates.get(key),
+                        numerator_date=numerator_date,
                         denominator_date=_coerce_date(mm.measure_date),
                         numerator_measure_id=ind.numerator_measure.measure_id,
                         denominator_measure_id=ind.denominator_measure.measure_id,
                         indicator=ind.indicator_id,
-                        numerator_value=key in numerator_dates,
+                        numerator_value=numerator_value,
                         denominator_value=True,
                     )
                 )

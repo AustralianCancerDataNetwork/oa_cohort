@@ -228,6 +228,54 @@ def test_build_pivot_indicators_uses_earliest_matching_numerator_date():
     assert rows[0].denominator_date == date(2024, 2, 1)
 
 
+def test_build_pivot_indicators_propagates_whole_cohort_numerator_across_person_episodes():
+    cohort_measure = FakeMeasure(10, "cohort", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 1, 1)),
+        MeasureMember(person_id=1, measure_resolver=222, measure_date=date(2024, 1, 5)),
+    ])
+    denominator_measure = FakeMeasure(0, "full cohort", [])
+    numerator_measure = FakeMeasure(30, "numerator", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 2, 7)),
+    ])
+    report = build_report(
+        cohort_measure=cohort_measure,
+        numerator_measure=numerator_measure,
+        denominator_measure=denominator_measure,
+    )
+    executor = seed_executor(MeasureExecutor(None), cohort_measure, numerator_measure)
+
+    rows = build_pivot_indicators(report, executor)
+
+    assert len(rows) == 2
+    assert [row.measure_resolver for row in rows] == [111, 222]
+    assert [row.numerator_value for row in rows] == [True, True]
+    assert [row.numerator_date for row in rows] == [date(2024, 2, 7), date(2024, 2, 7)]
+
+
+def test_build_pivot_indicators_propagates_earliest_whole_cohort_numerator_date():
+    cohort_measure = FakeMeasure(10, "cohort", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 1, 1)),
+        MeasureMember(person_id=1, measure_resolver=222, measure_date=date(2024, 1, 5)),
+    ])
+    denominator_measure = FakeMeasure(0, "full cohort", [])
+    numerator_measure = FakeMeasure(30, "numerator", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 2, 7)),
+        MeasureMember(person_id=1, measure_resolver=222, measure_date=datetime(2024, 2, 3, 15, 30)),
+    ])
+    report = build_report(
+        cohort_measure=cohort_measure,
+        numerator_measure=numerator_measure,
+        denominator_measure=denominator_measure,
+    )
+    executor = seed_executor(MeasureExecutor(None), cohort_measure, numerator_measure)
+
+    rows = build_pivot_indicators(report, executor)
+
+    assert len(rows) == 2
+    assert [row.numerator_value for row in rows] == [True, True]
+    assert [row.numerator_date for row in rows] == [date(2024, 2, 3), date(2024, 2, 3)]
+
+
 def test_build_pivot_indicators_excludes_undated_denominator_members():
     cohort_measure = FakeMeasure(10, "cohort", [
         MeasureMember(person_id=1, measure_resolver=101, measure_date=date(2024, 1, 1)),
@@ -254,6 +302,56 @@ def test_build_pivot_indicators_excludes_undated_denominator_members():
     assert rows[0].person_id == 2
     assert rows[0].numerator_value is True
     assert rows[0].denominator_date == date(2024, 2, 2)
+
+
+def test_build_pivot_indicators_keeps_nonzero_denominator_resolver_specific():
+    cohort_measure = FakeMeasure(10, "cohort", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 1, 1)),
+        MeasureMember(person_id=1, measure_resolver=222, measure_date=date(2024, 1, 2)),
+    ])
+    denominator_measure = FakeMeasure(20, "denominator", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 2, 1)),
+        MeasureMember(person_id=1, measure_resolver=222, measure_date=date(2024, 2, 2)),
+    ])
+    numerator_measure = FakeMeasure(30, "numerator", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 2, 5)),
+    ])
+    report = build_report(
+        cohort_measure=cohort_measure,
+        numerator_measure=numerator_measure,
+        denominator_measure=denominator_measure,
+    )
+    executor = seed_executor(MeasureExecutor(None), cohort_measure, denominator_measure, numerator_measure)
+
+    rows = build_pivot_indicators(report, executor)
+
+    assert len(rows) == 2
+    assert [row.numerator_value for row in rows] == [True, False]
+    assert [row.numerator_date for row in rows] == [date(2024, 2, 5), None]
+
+
+def test_build_pivot_indicators_whole_cohort_propagation_does_not_leak_across_people():
+    cohort_measure = FakeMeasure(10, "cohort", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 1, 1)),
+        MeasureMember(person_id=2, measure_resolver=111, measure_date=date(2024, 1, 2)),
+    ])
+    denominator_measure = FakeMeasure(0, "full cohort", [])
+    numerator_measure = FakeMeasure(30, "numerator", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 2, 7)),
+    ])
+    report = build_report(
+        cohort_measure=cohort_measure,
+        numerator_measure=numerator_measure,
+        denominator_measure=denominator_measure,
+    )
+    executor = seed_executor(MeasureExecutor(None), cohort_measure, numerator_measure)
+
+    rows = build_pivot_indicators(report, executor)
+
+    assert len(rows) == 2
+    assert [row.person_id for row in rows] == [1, 2]
+    assert [row.numerator_value for row in rows] == [True, False]
+    assert [row.numerator_date for row in rows] == [date(2024, 2, 7), None]
 
 
 def test_report_runner_execute_allows_strict_demography_after_full_cohort_reconciliation(monkeypatch):
