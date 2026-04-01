@@ -227,6 +227,6 @@ poetry.lock
 oa_system_config.yaml
 *__pycache__*
 
-*old*
-*dash_config*
+old/
+dash_config/
 *cohort_configurations*

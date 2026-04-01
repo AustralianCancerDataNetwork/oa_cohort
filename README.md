@@ -17,7 +17,7 @@ At a high level, the system lets you:
 * Execute the report against a database session and materialise results as in-memory member sets
 * Inspect SQL, executability, and structure via HTML renderers (handy in notebooks)
 
-This is intentionally object-centric: once a report is executed, all downstream payloads (cohort pivots, indicator pivots, demographics, etc.) are assembled from the object graph rather than re-querying the database.
+This is intentionally object-centric: once a report is executed, downstream payloads are assembled from the resolved cohort and indicator member sets, with report-level demography fetched only for the in-scope cohort person_ids.
 
 ## What’s here (roughly)
 
@@ -34,8 +34,8 @@ This is intentionally object-centric: once a report is executed, all downstream 
 report.execute(session)
 report.assert_executed()
 
-rows = report.members              # all cohort members
-indicators = report.indicators     # now have numerator_members / denominator_members
+rows = report.members(executor)    # all cohort members
+indicators = report.indicators     # output rows are built per denominator member within the report cohort
 ```
 
 ### Status

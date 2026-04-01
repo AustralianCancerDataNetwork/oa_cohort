@@ -48,9 +48,9 @@ This structure mirrors the way clinical quality is reported in practice: first i
 
 ![Report to indicator relationship](img/report_to_indicator.png)
 
-At execution time, both numerator and denominator measures must be executable. Each resolves independently into a set of `MeasureMember` objects, preserving episode alignment and qualification dates. The indicator then derives its membership by intersecting numerator and denominator members, ensuring that only individuals eligible under the denominator contribute to performance calculations.
+At execution time, both numerator and denominator measures must be executable. Each resolves independently into a set of `MeasureMember` objects, preserving episode alignment and qualification dates. For report output, indicator rows are emitted per denominator member within the report cohort, with numerator qualification evaluated against that denominator row.
 
-Numerator and denominator each retain their own qualification dates. These dates are not collapsed or overwritten. This allows reporting logic to apply temporal comparators at the report layer, rather than embedding window constraints directly into measure definitions.
+Numerator and denominator each retain their own qualification dates. Report payloads preserve `denominator_date` from the denominator event and `numerator_date` from the matched numerator event for the same person and resolver. This allows reporting logic to apply temporal comparators at the report layer, rather than embedding window constraints directly into measure definitions.
 
 Indicators often depend on temporal relationships between events.
 
@@ -69,6 +69,7 @@ This design ensures that:
 * Clinical logic remains modular
 * Time windowing remains configurable at the report level
 * Indicators can be reused in different reporting contexts
+* `measure_id = 0` can represent the full report cohort as a denominator during payload assembly
 
 ### Layer 3: Measure
 

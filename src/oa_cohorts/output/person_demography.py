@@ -1,6 +1,10 @@
 import sqlalchemy as sa
-from ..query.typing import SQLQuery
-from omop_constructs.alchemy.demography import PersonDemography
+
+
+def _person_demography_model():
+    from omop_constructs.alchemy.demography import PersonDemography
+
+    return PersonDemography
 
 class DemographyFilter:
     def __init__(
@@ -25,9 +29,11 @@ class DemographyFilter:
         self.index_date = index_date  
 
     def _base_stmt(self) -> sa.Select:
+        PersonDemography = _person_demography_model()
         return sa.select(PersonDemography)
 
     def _apply_filters(self, stmt: sa.Select) -> sa.Select:
+        PersonDemography = _person_demography_model()
         if self.sex:
             stmt = stmt.where(PersonDemography.sex == self.sex)
 
@@ -57,6 +63,7 @@ class DemographyFilter:
         return stmt
 
     def to_person_ids_subquery(self) -> sa.Subquery:
+        PersonDemography = _person_demography_model()
         stmt = sa.select(PersonDemography.person_id).distinct()
         stmt = self._apply_filters(stmt)
         return stmt.subquery()
@@ -65,6 +72,7 @@ class DemographyFilter:
         """
         Return a SELECT that yields full demography rows (for payload materialisation).
         """
+        PersonDemography = _person_demography_model()
         stmt = self._base_stmt()
         stmt = self._apply_filters(stmt)
 

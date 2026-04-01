@@ -5,10 +5,8 @@ from dataclasses import dataclass
 from typing import Iterable, Sequence, TypeAlias, Protocol, runtime_checkable, Literal
 
 from sqlalchemy.sql import Select, CompoundSelect
-from ..core.html_utils import HTMLRenderable, RawHTML, esc, table, td
+from ..core.html_utils import HTMLRenderable, RawHTML, esc
 from ..query.measure import Measure, MeasureSQLCompiler
-from ..query.subquery import Subquery
-from ..core import RuleCombination
 
 SQLQuery: TypeAlias = Select | CompoundSelect
 

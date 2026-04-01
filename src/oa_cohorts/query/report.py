@@ -199,9 +199,10 @@ class Report(HTMLRenderable, Base):
                 if strict:
                     raise
 
-        cohort_members = self.members
+        cohort_members = self.members(executor)
         for m in self.indicator_measures:
             if m.measure_id == 0:
+                executor._cache[m.measure_id] = cohort_members
                 m._members = cohort_members
 
     def assert_executed(self):

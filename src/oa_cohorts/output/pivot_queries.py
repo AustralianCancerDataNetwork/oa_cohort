@@ -1,7 +1,10 @@
+from __future__ import annotations
+
+from datetime import date, datetime
 from typing import Sequence
+from typing import TYPE_CHECKING
 from ..query.report import Report
-from ..query.typing import Row
-from ..query.measure import MeasureExecutor
+from ..query.measure import MeasureExecutor, MeasureMember
 from .report_payload import (
     DashCohortDefinitionPayload, 
     DashCohortPayload, 
@@ -13,7 +16,56 @@ from .report_payload import (
     PivotCohortRow,
     ReportMeasurePayload
 )
-from omop_constructs.alchemy.demography import PersonDemography
+
+if TYPE_CHECKING:
+    from omop_constructs.alchemy.demography import PersonDemography
+
+
+def collect_report_cohort_members(report: Report, executor: MeasureExecutor) -> list[MeasureMember]:
+    members: list[MeasureMember] = []
+
+    for report_cohort in report.cohorts:
+        cohort = report_cohort.cohort
+        if not cohort:
+            continue
+
+        for definition in cohort.definitions:
+            measure = definition.dash_cohort_measure
+            if not measure:
+                continue
+            members.extend(measure.members(executor))
+
+    return members
+
+
+def _dedupe_members(members: Sequence[MeasureMember]) -> list[MeasureMember]:
+    seen: set[MeasureMember] = set()
+    out: list[MeasureMember] = []
+
+    for member in members:
+        if member in seen:
+            continue
+        seen.add(member)
+        out.append(member)
+
+    return out
+
+
+def _coerce_date(value: date | datetime | None) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    return value
+
+
+def _pick_earliest_date(current: date | None, candidate: date | None) -> date | None:
+    if current is None:
+        return candidate
+    if candidate is None:
+        return current
+    return min(current, candidate)
+
 
 def build_cohort_demography(rows: Sequence[PersonDemography]) -> list[CohortDemographyRow]:
     out: list[CohortDemographyRow] = []
@@ -34,25 +86,54 @@ def build_cohort_demography(rows: Sequence[PersonDemography]) -> list[CohortDemo
     return out
 
 
-def build_pivot_indicators(report: Report, executor: MeasureExecutor, strict: bool = True) -> list[PivotIndicatorRow]:
+def build_pivot_indicators(
+    report: Report,
+    executor: MeasureExecutor,
+    strict: bool = True,
+    cohort_members: Sequence[MeasureMember] | None = None,
+) -> list[PivotIndicatorRow]:
     rows: list[PivotIndicatorRow] = []
+    resolved_cohort_members = list(cohort_members) if cohort_members is not None else collect_report_cohort_members(report, executor)
+    cohort_resolvers = {member.measure_resolver for member in resolved_cohort_members}
 
     for ind in report.indicators:
         try:
-            num = {mm for mm in ind.numerator_members(executor)}
-            den = {mm for mm in ind.denominator_members(executor)}
+            if ind.denominator_measure_id == 0:
+                denominator_members = _dedupe_members(resolved_cohort_members)
+            else:
+                denominator_members = _dedupe_members([
+                    mm
+                    for mm in ind.denominator_measure.members(executor)
+                    if mm.measure_resolver in cohort_resolvers and mm.measure_date is not None
+                ])
 
-            for mm in num & den:
+            denominator_keys = {
+                (member.person_id, member.measure_resolver)
+                for member in denominator_members
+            }
+            numerator_dates: dict[tuple[int, int], date | None] = {}
+
+            for member in ind.numerator_measure.members(executor):
+                key = (member.person_id, member.measure_resolver)
+                if key not in denominator_keys:
+                    continue
+                numerator_dates[key] = _pick_earliest_date(
+                    numerator_dates.get(key),
+                    _coerce_date(member.measure_date),
+                )
+
+            for mm in denominator_members:
+                key = (mm.person_id, mm.measure_resolver)
                 rows.append(
                     PivotIndicatorRow(
                         person_id=mm.person_id,
                         measure_resolver=mm.measure_resolver,
-                        numerator_date=mm.measure_date,
-                        denominator_date=mm.measure_date,  
+                        numerator_date=numerator_dates.get(key),
+                        denominator_date=_coerce_date(mm.measure_date),
                         numerator_measure_id=ind.numerator_measure.measure_id,
                         denominator_measure_id=ind.denominator_measure.measure_id,
                         indicator=ind.indicator_id,
-                        numerator_value=True,
+                        numerator_value=key in numerator_dates,
                         denominator_value=True,
                     )
                 )

@@ -1,20 +1,21 @@
 from __future__ import annotations
-import sqlalchemy as sa
 import sqlalchemy.orm as so
-from typing import Sequence
-from ..query.typing import Row
+from typing import Sequence, TYPE_CHECKING
 from ..query.report import Report
-from ..query.measure import MeasureExecutor
+from ..query.measure import MeasureExecutor, MeasureMember
 from .person_demography import DemographyFilter
 from .query_plan import QueryPlan, MeasureNode
 from .report_payload import ReportBundle, PivotCohortRow, PivotIndicatorRow
 from .pivot_queries import (
     build_pivot_indicators, 
     build_pivot_cohort, 
+    collect_report_cohort_members,
     build_cohort_demography,
     build_report_payload
 )
-from omop_constructs.alchemy.demography import PersonDemography
+
+if TYPE_CHECKING:
+    from omop_constructs.alchemy.demography import PersonDemography
 
 class ReportRunner:
     """
@@ -27,6 +28,7 @@ class ReportRunner:
         self._demography_rows: Sequence[PersonDemography] | None = None
         self._cohort_rows: list[PivotCohortRow] | None = None
         self._indicator_rows: list[PivotIndicatorRow] | None = None
+        self._report_cohort_members: list[MeasureMember] | None = None
         self._plans: dict[int, QueryPlan] = {}
         self._executor = MeasureExecutor(db)
 
@@ -34,6 +36,11 @@ class ReportRunner:
         """
         Executes all measures needed for this report.
         """
+        self._report_cohort_members = None
+        self._demography_rows = None
+        self._cohort_rows = None
+        self._indicator_rows = None
+
         # 1. Preflight compile
         for m in self.report.indicator_measures + self.report.cohort_measures:
             try:
@@ -67,7 +74,7 @@ class ReportRunner:
         if strict:
             self.report.assert_executed()
 
-        cohort_person_ids = [m.person_id for m in self.report.members(self._executor)]
+        cohort_person_ids = [m.person_id for m in self.collect_report_cohort_members()]
 
         demo_filter = DemographyFilter()
 
@@ -77,6 +84,11 @@ class ReportRunner:
 
         self._demography_rows = self.db.execute(stmt).scalars().all()
         return self._demography_rows
+
+    def collect_report_cohort_members(self) -> list[MeasureMember]:
+        if self._report_cohort_members is None:
+            self._report_cohort_members = collect_report_cohort_members(self.report, self._executor)
+        return self._report_cohort_members
 
     def collect_pivot_cohort(self, strict: bool = True) -> list[PivotCohortRow]:
         """
@@ -89,7 +101,12 @@ class ReportRunner:
         """
         Build indicator pivot rows from executed Measure.members.
         """
-        self._indicator_rows = build_pivot_indicators(self.report, executor=self._executor, strict=strict)
+        self._indicator_rows = build_pivot_indicators(
+            self.report,
+            executor=self._executor,
+            strict=strict,
+            cohort_members=self.collect_report_cohort_members(),
+        )
         return self._indicator_rows
     
     def build_bundle(self, strict: bool = True) -> ReportBundle:

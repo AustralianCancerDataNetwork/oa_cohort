@@ -3,9 +3,9 @@ import sqlalchemy as sa
 import sqlalchemy.orm as so
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional, Sequence, cast, Callable
+from typing import Optional, Sequence, Callable
 from orm_loader.helpers import Base
-from .typing import Row, SQLQuery, COMBINATION_SQL
+from .typing import SQLQuery, COMBINATION_SQL
 from .subquery import Subquery
 from ..core.executability import MeasureExecCheck, ExecStatus
 from ..core import RuleCombination
@@ -101,6 +101,7 @@ class Measure(HTMLRenderable, Base):
         foreign_keys="MeasureRelationship.child_measure_id",
         lazy="selectin",
     )
+    _members: Sequence[MeasureMember] | None = None
 
     def members(self, executor: MeasureExecutor):
         return executor.members(self)
@@ -183,7 +184,7 @@ class Measure(HTMLRenderable, Base):
                 "ID": self.measure_id,
                 "Name": self.name,
                 "Combination": RawHTML(
-                    f"<span class='badge neutral'>FULL COHORT</span>"
+                    "<span class='badge neutral'>FULL COHORT</span>"
                 ),
                 "Subquery": RawHTML("<i>Report cohort (no filtering)</i>"),
                 "Children": len(self.children),
@@ -500,7 +501,7 @@ class MeasureExecutor:
             )
         if not force_refresh and measure.measure_id in self._cache:
             rows = self._cache[measure.measure_id]
-            #measure._members = rows
+            measure._members = rows
             return rows
         
         sql = MeasureSQLCompiler(measure).sql_any(ep_override=ep_override)
@@ -512,7 +513,7 @@ class MeasureExecutor:
         rows = self.db.execute(sql).all()
         rows_typed = [MeasureMember.from_row(r) for r in rows]
         self._cache[measure.measure_id] = rows_typed
-        #measure._members = rows_typed
+        measure._members = rows_typed
         return rows_typed
     
     def members(self, measure: Measure) -> Sequence[MeasureMember]:
