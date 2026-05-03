@@ -36,6 +36,13 @@ class SQLVariant(str, enum.Enum):
     undated = "undated"
 
 
+class StatusTone(str, enum.Enum):
+    pass_ = "pass"
+    fail = "fail"
+    warn = "warn"
+    neutral = "neutral"
+
+
 EntityPayload: TypeAlias = Mapping[str, Any]
 
 
@@ -91,6 +98,14 @@ class SQLPreview:
 
 
 @dataclass(frozen=True)
+class RuleStatus:
+    code: str
+    label: str
+    tone: StatusTone
+    detail: str | None = None
+
+
+@dataclass(frozen=True)
 class WorkspaceNode:
     kind: EntityKind
     entity_id: int
@@ -101,6 +116,8 @@ class WorkspaceNode:
     editable: bool = True
     valid: bool = True
     executability: str | None = None
+    status_label: str | None = None
+    status_tone: StatusTone | None = None
     children: tuple["WorkspaceNode", ...] = ()
 
 
@@ -146,6 +163,7 @@ class EntityDetail:
     preview_variants: tuple[SQLVariant, ...]
     allowed_actions: Mapping[str, bool]
     executability: str | None = None
+    rule_status: RuleStatus | None = None
 
 
 @dataclass(frozen=True)
@@ -157,4 +175,3 @@ class MutationResult:
     usage: UsageSummary | None = None
     validation: ValidationResult | None = None
     errors: tuple[str, ...] = ()
-

@@ -18,11 +18,13 @@ from .models import (
     EntityKind,
     ReportSummary,
     ReportWorkspace,
+    RuleStatus,
     SQLVariant,
     UsageSummary,
     WorkspaceNode,
 )
 from .preview import preview_measure, preview_subquery
+from .status import resolve_rule_status
 from .validation import entity_fields, validate_entity_instance
 
 
@@ -178,6 +180,9 @@ def load_entity_detail(session: so.Session, kind: EntityKind, entity_id: int) ->
         fields["indicator_count"] = len(entity.indicators)
 
     editable = not usage.shared and not (kind is EntityKind.measure and entity_id == 0)
+    rule_status: RuleStatus | None = None
+    if kind is EntityKind.query_rule:
+        rule_status = _rule_status_for_rule(session, entity, validation, usage.shared)
     return EntityDetail(
         kind=kind,
         entity_id=entity_id,
@@ -196,6 +201,7 @@ def load_entity_detail(session: so.Session, kind: EntityKind, entity_id: int) ->
             "can_add_child": kind in {EntityKind.measure, EntityKind.subquery, EntityKind.report, EntityKind.dash_cohort},
         },
         executability=executability,
+        rule_status=rule_status,
     )
 
 
@@ -437,6 +443,7 @@ def _workspace_node_for_rule(
 ) -> WorkspaceNode:
     usage = _usage_summary(session, EntityKind.query_rule, rule.query_rule_id, usage_cache)
     validation = validate_entity_instance(EntityKind.query_rule, rule)
+    rule_status = _rule_status_for_rule(session, rule, validation, usage.shared)
     return WorkspaceNode(
         kind=EntityKind.query_rule,
         entity_id=rule.query_rule_id,
@@ -446,8 +453,58 @@ def _workspace_node_for_rule(
         shared=usage.shared,
         editable=not usage.shared,
         valid=validation.valid,
+        status_label=rule_status.label,
+        status_tone=rule_status.tone,
         children=(),
     )
+
+
+def _rule_status_for_rule(
+    session: so.Session,
+    rule: QueryRule,
+    validation,
+    shared: bool,
+) -> RuleStatus:
+    matcher = rule.matcher.value if rule.matcher is not None else None
+    return resolve_rule_status(
+        validation=validation,
+        matcher=matcher,
+        concept_resolves=_concept_resolves(rule),
+        phenotype_resolves=_phenotype_resolves(rule),
+        execution_blocked=_rule_execution_blocked(session, rule, validation),
+        shared=shared,
+    )
+
+
+def _concept_resolves(rule: QueryRule) -> bool | None:
+    if rule.concept_id is None:
+        return None
+    return rule.concept is not None
+
+
+def _phenotype_resolves(rule: QueryRule) -> bool | None:
+    if rule.phenotype_id is None:
+        return None
+    return rule.phenotype is not None
+
+
+def _rule_execution_blocked(
+    session: so.Session,
+    rule: QueryRule,
+    validation,
+) -> bool:
+    if not validation.valid:
+        return False
+    subqueries = session.execute(
+        sa.select(Subquery)
+        .join(subquery_rule_map, Subquery.subquery_id == subquery_rule_map.c.subquery_id)
+        .where(subquery_rule_map.c.query_rule_id == rule.query_rule_id)
+    ).scalars().unique().all()
+    for subquery in subqueries:
+        preview = preview_subquery(subquery, SQLVariant.any)
+        if preview.status.lower() != "executable":
+            return True
+    return False
 
 
 def _entity_title(kind: EntityKind, entity: Any) -> str:

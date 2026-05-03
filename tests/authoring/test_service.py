@@ -22,11 +22,16 @@ def test_list_reports_and_workspace(tmp_path):
         assert len(reports) == 1
         workspace = service.get_report_workspace(session, 1)
         by_short_name = service.get_report_workspace_by_short_name(session, "test")
+        rule_detail = service.get_entity_detail(session, EntityKind.query_rule, 1)
         assert workspace.report_name == "Test report"
         assert by_short_name.report_id == workspace.report_id
         assert workspace.primary_cohort_names == ("Test cohort",)
         assert len(workspace.cohorts) == 1
         assert len(workspace.indicators) == 1
+        assert rule_detail.rule_status is not None
+        rule_node = workspace.cohorts[0].children[0].children[0].children[0].children[0].children[0]
+        assert rule_node.kind is EntityKind.query_rule
+        assert rule_node.status_label is not None
 
 
 def test_entity_detail_reports_shared_measure_usage(tmp_path):
