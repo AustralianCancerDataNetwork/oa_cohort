@@ -50,7 +50,7 @@ This structure mirrors the way clinical quality is reported in practice: first i
 
 At execution time, both numerator and denominator measures must be executable. Each resolves independently into a set of `MeasureMember` objects, preserving episode alignment and qualification dates. For report output, indicator rows are emitted per denominator member within the report cohort, with numerator qualification evaluated against that denominator row.
 
-Numerator and denominator each retain their own qualification dates. Report payloads preserve `denominator_date` from the denominator event and `numerator_date` from the matched numerator event for the same person and resolver. When the denominator is the full report cohort (`measure_id = 0`), final payload assembly resolves numerator truth at the person level so a qualifying numerator linked to one in-scope episode does not create failure rows for that same person’s other in-scope episodes. This allows reporting logic to apply temporal comparators at the report layer, rather than embedding window constraints directly into measure definitions.
+Numerator and denominator each retain their own qualification dates. Report payloads preserve `denominator_date` from the denominator event and `numerator_date` from the matched numerator event for the same person and resolver. When the denominator is the full report cohort (`measure_id = 0`), final payload assembly still evaluates numerator truth per cohort membership row, using that row's cohort membership date as the anchor. This allows different in-scope episodes for the same person to qualify differently when indicator-level windows are configured.
 
 Indicators often depend on temporal relationships between events.
 
@@ -62,12 +62,19 @@ For example:
 
 In these cases, numerator and denominator measures may each resolve at different dates. The reporting layer applies temporal comparators between these preserved qualification dates.
 
+Indicators can also define dynamic relative date windows on either side:
+
+* numerator window: `numerator_max_days_prior` / `numerator_max_days_post`
+* denominator window: `denominator_max_days_prior` / `denominator_max_days_post`
+
+These windows are not attached to the reusable `Measure`. Instead, they are applied during indicator row assembly relative to the report cohort membership date. This keeps the measure definition broad and reusable while allowing the same measure to support different timing rules in different indicators.
+
 ![Report to indicator relationship example](img/report_to_indicator_example.png)
 
 This design ensures that:
 
 * Clinical logic remains modular
-* Time windowing remains configurable at the report level
+* Time windowing remains configurable at the indicator/report-output level
 * Indicators can be reused in different reporting contexts
 * `measure_id = 0` can represent the full report cohort as a denominator during payload assembly
 

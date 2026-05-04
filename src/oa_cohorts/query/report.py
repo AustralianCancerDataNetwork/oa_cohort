@@ -116,7 +116,7 @@ class Report(HTMLRenderable, Base):
     id = so.synonym('report_id')
 
     report_name: so.Mapped[str] = so.mapped_column(sa.String(250))
-    report_short_name: so.Mapped[str] = so.mapped_column(sa.String(50))
+    report_short_name: so.Mapped[str] = so.mapped_column(sa.String(50), unique=True)
     report_description: so.Mapped[str] = so.mapped_column(sa.String(1000))
     report_create_date: so.Mapped[date] = so.mapped_column(sa.DateTime, default=date.today)
     report_edit_date: so.Mapped[date] = so.mapped_column(sa.DateTime, default=date.today)

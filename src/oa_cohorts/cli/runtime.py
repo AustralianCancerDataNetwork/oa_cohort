@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 
 import sqlalchemy as sa
-from omop_constructs.semantics import registry_engine
 from rich.console import Console
 from sqlalchemy.exc import SQLAlchemyError
 import typer
@@ -15,6 +14,8 @@ def resolve_engine(*, database_url: str | None) -> tuple[sa.Engine, str | None]:
     resolved_url = database_url or os.getenv("ENGINE")
     if resolved_url:
         return sa.create_engine(resolved_url), resolved_url
+    from omop_constructs.semantics import registry_engine
+
     return registry_engine, None
 
 
