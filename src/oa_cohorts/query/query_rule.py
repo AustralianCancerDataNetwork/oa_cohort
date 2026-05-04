@@ -49,7 +49,7 @@ class QueryRule(Base, HTMLRenderable):
     }
 
     # relationships
-    concept: so.Mapped[Concept | None] = so.relationship(Concept,lazy="joined")
+    concept: so.Mapped[Concept | None] = so.relationship(Concept, lazy="select")
     phenotype: so.Mapped[Phenotype | None] = so.relationship(Phenotype,lazy="joined")
 
     @property

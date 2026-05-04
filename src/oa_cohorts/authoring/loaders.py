@@ -14,19 +14,25 @@ from oa_cohorts.query.report import Report, ReportCohortMap, ReportVersion, repo
 from oa_cohorts.query.subquery import Subquery, subquery_rule_map
 
 from .models import (
+    DetailLink,
+    DetailRow,
+    DetailSection,
     EntityDetail,
     EntityKind,
+    ExecutionIssue,
     ReportSummary,
+    DashCohortDefSummary,
     ReportWorkspace,
+    DashCohortDefWorkspace,
     RuleStatus,
     SQLVariant,
+    TailoredDetailView,
     UsageSummary,
     WorkspaceNode,
 )
 from .preview import preview_measure, preview_subquery
 from .status import resolve_rule_status
 from .validation import entity_fields, validate_entity_instance
-
 
 ENTITY_MODEL = {
     EntityKind.report: Report,
@@ -40,6 +46,20 @@ ENTITY_MODEL = {
     EntityKind.phenotype: Phenotype,
 }
 
+def list_cohorts(session: so.Session) -> list[DashCohortDefSummary]:
+    stmt = (
+        sa.select(DashCohortDef)
+    )
+    cohorts = session.execute(stmt).scalars().unique().all()
+    return [
+        DashCohortDefSummary(
+            dash_cohort_def_id=cohort.dash_cohort_def_id,
+            dash_cohort_def_name=cohort.dash_cohort_def_name,
+            dash_cohort_def_short_name=cohort.dash_cohort_def_short_name,
+            measure_id=cohort.measure_id,
+        )
+        for cohort in cohorts
+    ]
 
 def list_reports(session: so.Session) -> list[ReportSummary]:
     stmt = (
@@ -66,6 +86,18 @@ def list_reports(session: so.Session) -> list[ReportSummary]:
         for report in reports
     ]
 
+
+def load_dash_cohort_workspace(session: so.Session, dash_cohort_def_id: int) -> DashCohortDefWorkspace:
+    dash_cohort_def = session.execute(
+        sa.select(DashCohortDef)
+        .where(DashCohortDef.dash_cohort_def_id == dash_cohort_def_id)
+    ).scalars().unique().one()
+    return DashCohortDefWorkspace(
+        dash_cohort_def_id=dash_cohort_def.dash_cohort_def_id,
+        dash_cohort_def_name=dash_cohort_def.dash_cohort_def_name,
+        dash_cohort_def_short_name=dash_cohort_def.dash_cohort_def_short_name,
+        measure_id=dash_cohort_def.measure_id
+    )
 
 def load_report_workspace(session: so.Session, report_id: int) -> ReportWorkspace:
     report = session.execute(
@@ -123,13 +155,18 @@ def load_report_workspace(session: so.Session, report_id: int) -> ReportWorkspac
         indicators=indicators,
     )
 
+def load_dash_cohort_workspace_by_short_name(session: so.Session, dash_cohort_def_short_name: str) -> DashCohortDefWorkspace:
+    dash_cohort_def = session.execute(
+        sa.select(DashCohortDef)
+        .where(sa.func.lower(DashCohortDef.dash_cohort_def_short_name) == dash_cohort_def_short_name.lower())
+    ).scalars().unique().one()
+    return load_dash_cohort_workspace(session, dash_cohort_def.dash_cohort_def_id)
 
 def load_report_workspace_by_short_name(session: so.Session, report_short_name: str) -> ReportWorkspace:
     report = session.execute(
         sa.select(Report.report_id).where(sa.func.lower(Report.report_short_name) == report_short_name.lower())
     ).scalar_one()
     return load_report_workspace(session, report)
-
 
 def is_report_short_name_available(
     session: so.Session,
@@ -165,6 +202,8 @@ def load_entity_detail(session: so.Session, kind: EntityKind, entity_id: int) ->
         executability = preview_subquery(entity, SQLVariant.any).status
     elif kind is EntityKind.indicator:
         executability = entity.is_executable().status.value
+    elif kind is EntityKind.dash_cohort:
+        executability = _dash_cohort_status(entity).value
     elif kind is EntityKind.dash_cohort_def:
         executability = entity.is_executable().status.value
     elif kind is EntityKind.report:
@@ -183,6 +222,7 @@ def load_entity_detail(session: so.Session, kind: EntityKind, entity_id: int) ->
     rule_status: RuleStatus | None = None
     if kind is EntityKind.query_rule:
         rule_status = _rule_status_for_rule(session, entity, validation, usage.shared)
+    execution_issues = _execution_issues_for_entity(entity, kind)
     return EntityDetail(
         kind=kind,
         entity_id=entity_id,
@@ -202,6 +242,8 @@ def load_entity_detail(session: so.Session, kind: EntityKind, entity_id: int) ->
         },
         executability=executability,
         rule_status=rule_status,
+        execution_issues=execution_issues,
+        detail_view=_tailored_detail_view(entity, kind, usage),
     )
 
 
@@ -356,6 +398,7 @@ def _workspace_node_for_cohort(
         shared=usage.shared,
         editable=not usage.shared,
         valid=validation.valid,
+        executability=_dash_cohort_status(cohort).value,
         children=children,
     )
 
@@ -476,10 +519,118 @@ def _rule_status_for_rule(
     )
 
 
+def _execution_issues_for_entity(entity: Any, kind: EntityKind) -> tuple[ExecutionIssue, ...]:
+    if kind is EntityKind.measure:
+        return _issues_from_failed_variants(entity.is_executable().failed_variants)
+    if kind is EntityKind.dash_cohort_def:
+        return _issues_from_failed_variants(entity.is_executable().failed_variants)
+    if kind is EntityKind.dash_cohort:
+        issues: list[ExecutionIssue] = []
+        for definition in entity.definitions:
+            issues.extend(
+                _issues_from_failed_variants(
+                    definition.is_executable().failed_variants,
+                    prefix=definition.dash_cohort_def_name,
+                )
+            )
+        return tuple(issues)
+    if kind is EntityKind.indicator:
+        check = entity.is_executable()
+        issues: list[ExecutionIssue] = []
+        issues.extend(
+            _issues_from_failed_variants(
+                check.numerator.failed_variants,
+                prefix=f"Numerator {entity.numerator_measure_id}",
+            )
+        )
+        issues.extend(
+            _issues_from_failed_variants(
+                check.denominator.failed_variants,
+                prefix=f"Denominator {entity.denominator_measure_id}",
+            )
+        )
+        return tuple(issues)
+    if kind is EntityKind.subquery:
+        issues: list[ExecutionIssue] = []
+        for variant, fn in (
+            ("ANY", entity.sql_any),
+            ("FIRST", entity.sql_first),
+            ("UNDATED", entity.sql_undated),
+        ):
+            try:
+                _ = fn()
+            except Exception as exc:
+                issues.append(ExecutionIssue(label=variant, message=str(exc)))
+        return tuple(issues)
+    if kind is EntityKind.report:
+        issues: list[ExecutionIssue] = []
+        for cohort_map in entity.cohorts:
+            cohort = cohort_map.cohort
+            if cohort is None:
+                continue
+            for definition in cohort.definitions:
+                issues.extend(
+                    _issues_from_failed_variants(
+                        definition.is_executable().failed_variants,
+                        prefix=f"Cohort {cohort.dash_cohort_name} / {definition.dash_cohort_def_name}",
+                    )
+                )
+        for indicator in entity.indicators:
+            check = indicator.is_executable()
+            issues.extend(
+                _issues_from_failed_variants(
+                    check.numerator.failed_variants,
+                    prefix=f"Indicator {indicator.indicator_description} / numerator",
+                )
+            )
+            issues.extend(
+                _issues_from_failed_variants(
+                    check.denominator.failed_variants,
+                    prefix=f"Indicator {indicator.indicator_description} / denominator",
+                )
+            )
+        return tuple(issues)
+    return ()
+
+
+def _issues_from_failed_variants(
+    failed_variants: dict[str, str],
+    *,
+    prefix: str | None = None,
+) -> tuple[ExecutionIssue, ...]:
+    issues: list[ExecutionIssue] = []
+    for variant, message in failed_variants.items():
+        label = variant if prefix is None else f"{prefix} / {variant}"
+        issues.append(ExecutionIssue(label=label, message=message))
+    return tuple(issues)
+
+
+def _dash_cohort_status(cohort: DashCohort):
+    statuses = [definition.is_executable().status for definition in cohort.definitions]
+    if not statuses:
+        from oa_cohorts.core.executability import ExecStatus
+
+        return ExecStatus.FAIL
+    if any(status.value == "fail" for status in statuses):
+        from oa_cohorts.core.executability import ExecStatus
+
+        return ExecStatus.FAIL
+    if any(status.value == "warn" for status in statuses):
+        from oa_cohorts.core.executability import ExecStatus
+
+        return ExecStatus.WARN
+    from oa_cohorts.core.executability import ExecStatus
+
+    return ExecStatus.PASS
+
+
 def _concept_resolves(rule: QueryRule) -> bool | None:
     if rule.concept_id is None:
         return None
-    return rule.concept is not None
+    try:
+        return rule.concept is not None
+    except sa.exc.SQLAlchemyError: # type: ignore
+        return False
 
 
 def _phenotype_resolves(rule: QueryRule) -> bool | None:
@@ -502,9 +653,159 @@ def _rule_execution_blocked(
     ).scalars().unique().all()
     for subquery in subqueries:
         preview = preview_subquery(subquery, SQLVariant.any)
-        if preview.status.lower() != "executable":
+        if preview.status.lower() == "fail":
             return True
     return False
+
+
+def _tailored_detail_view(
+    entity: Any,
+    kind: EntityKind,
+    usage: UsageSummary,
+) -> TailoredDetailView | None:
+    if kind is EntityKind.report:
+        return TailoredDetailView(
+            summary_sections=(
+                DetailSection(
+                    title="Summary",
+                    rows=(
+                        DetailRow("Name", entity.report_name),
+                        DetailRow("Short name", entity.report_short_name),
+                        DetailRow("Description", entity.report_description or "-"),
+                        DetailRow("Author", entity.report_author or "-"),
+                        DetailRow("Owner", entity.report_owner or "-"),
+                    ),
+                ),
+            ),
+            hide_relationships=True,
+        )
+    if kind is EntityKind.indicator:
+        return TailoredDetailView(
+            summary_sections=(
+                DetailSection(
+                    title="Summary",
+                    rows=(
+                        DetailRow("Description", entity.indicator_description),
+                        DetailRow("Reference", entity.indicator_reference or "-"),
+                        DetailRow("Numerator label", entity.numerator_label or "-"),
+                        DetailRow("Denominator label", entity.denominator_label or "-"),
+                    ),
+                ),
+                DetailSection(
+                    title="Defining measures",
+                    rows=(
+                        DetailRow(
+                            "Numerator measure",
+                            entity.numerator_measure.name,
+                            link=_detail_link(EntityKind.measure, entity.numerator_measure_id, entity.numerator_measure.name),
+                        ),
+                        DetailRow(
+                            "Denominator measure",
+                            entity.denominator_measure.name,
+                            link=_detail_link(EntityKind.measure, entity.denominator_measure_id, entity.denominator_measure.name),
+                        ),
+                    ),
+                ),
+            ),
+            hide_relationships=True,
+        )
+    if kind is EntityKind.dash_cohort:
+        definition_rows = tuple(
+            DetailRow(
+                definition.dash_cohort_def_name,
+                definition.dash_cohort_measure.name,
+                link=_detail_link(
+                    EntityKind.measure,
+                    definition.measure_id,
+                    definition.dash_cohort_measure.name,
+                ),
+            )
+            for definition in entity.definitions
+        )
+        return TailoredDetailView(
+            summary_sections=(
+                DetailSection(
+                    title="Summary",
+                    rows=(
+                        DetailRow("Name", entity.dash_cohort_name),
+                        DetailRow("Definitions", str(len(entity.definitions))),
+                    ),
+                ),
+            ),
+            secondary_sections=(
+                DetailSection(title="Definitions", rows=definition_rows),
+            ),
+            hide_relationships=True,
+        )
+    if kind is EntityKind.dash_cohort_def:
+        return TailoredDetailView(
+            summary_sections=(
+                DetailSection(
+                    title="Summary",
+                    rows=(
+                        DetailRow("Name", entity.dash_cohort_def_name),
+                        DetailRow("Short name", entity.dash_cohort_def_short_name or "-"),
+                        DetailRow(
+                            "Defining measure",
+                            entity.dash_cohort_measure.name,
+                            link=_detail_link(EntityKind.measure, entity.measure_id, entity.dash_cohort_measure.name),
+                        ),
+                    ),
+                ),
+            ),
+            secondary_sections=(
+                DetailSection(
+                    title="Linked cohorts",
+                    rows=tuple(
+                        DetailRow(
+                            "Cohort",
+                            cohort.dash_cohort_name,
+                            link=_detail_link(EntityKind.dash_cohort, cohort.dash_cohort_id, cohort.dash_cohort_name),
+                        )
+                        for cohort in entity.dash_cohort_objects
+                    ),
+                ),
+            ),
+            hide_relationships=True,
+        )
+    if kind is EntityKind.measure:
+        rows = [
+            DetailRow("Name", entity.name),
+            DetailRow("Combination", entity.combination.value),
+            DetailRow("Used by", str(usage.inbound_count)),
+        ]
+        if entity.subquery is not None:
+            rows.append(
+                DetailRow(
+                    "Subquery",
+                    entity.subquery.name,
+                    link=_detail_link(EntityKind.subquery, entity.subquery_id, entity.subquery.name),
+                )
+            )
+        if entity.children:
+            child_rows = tuple(
+                DetailRow(
+                    child.name,
+                    child.combination.value,
+                    link=_detail_link(EntityKind.measure, child.measure_id, child.name),
+                )
+                for child in entity.children
+            )
+        else:
+            child_rows = ()
+        secondary_sections = ()
+        if child_rows:
+            secondary_sections = (DetailSection(title="Child measures", rows=child_rows),)
+        return TailoredDetailView(
+            summary_sections=(DetailSection(title="Summary", rows=tuple(rows)),),
+            secondary_sections=secondary_sections,
+            hide_relationships=True,
+        )
+    return None
+
+
+def _detail_link(kind: EntityKind, entity_id: int, label: str) -> DetailLink:
+    return DetailLink(kind=kind, entity_id=entity_id, label=label)
 
 
 def _entity_title(kind: EntityKind, entity: Any) -> str:

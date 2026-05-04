@@ -1,4 +1,7 @@
 from .models import (
+    DetailLink,
+    DetailRow,
+    DetailSection,
     EntityDetail,
     EntityKind,
     EntityPayload,
@@ -11,6 +14,7 @@ from .models import (
     SQLPreview,
     SQLVariant,
     StatusTone,
+    TailoredDetailView,
     UsageSummary,
     ValidationResult,
     WorkspaceNode,
@@ -19,6 +23,9 @@ from .service import AuthoringService
 
 __all__ = [
     "AuthoringService",
+    "DetailLink",
+    "DetailRow",
+    "DetailSection",
     "EntityDetail",
     "EntityKind",
     "EntityPayload",
@@ -31,6 +38,7 @@ __all__ = [
     "SQLPreview",
     "SQLVariant",
     "StatusTone",
+    "TailoredDetailView",
     "UsageSummary",
     "ValidationResult",
     "WorkspaceNode",

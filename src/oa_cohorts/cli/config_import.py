@@ -448,7 +448,8 @@ def import_config_directory(
         raise NotADirectoryError(f"Config path is not a directory: {config_path}")
 
     if create_tables and not dry_run:
-        Base.metadata.create_all(session.get_bind())
+        config_tables = [spec.table for spec in CONFIG_IMPORT_SPECS]
+        Base.metadata.create_all(session.get_bind(), tables=config_tables)
 
     results: list[TableImportResult] = []
     table_count = len(CONFIG_IMPORT_SPECS)

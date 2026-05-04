@@ -106,6 +106,39 @@ class RuleStatus:
 
 
 @dataclass(frozen=True)
+class ExecutionIssue:
+    label: str
+    message: str
+
+
+@dataclass(frozen=True)
+class DetailLink:
+    kind: EntityKind
+    entity_id: int
+    label: str
+
+
+@dataclass(frozen=True)
+class DetailRow:
+    label: str
+    value: str
+    link: DetailLink | None = None
+
+
+@dataclass(frozen=True)
+class DetailSection:
+    title: str
+    rows: tuple[DetailRow, ...]
+
+
+@dataclass(frozen=True)
+class TailoredDetailView:
+    summary_sections: tuple[DetailSection, ...] = ()
+    secondary_sections: tuple[DetailSection, ...] = ()
+    hide_relationships: bool = False
+
+
+@dataclass(frozen=True)
 class WorkspaceNode:
     kind: EntityKind
     entity_id: int
@@ -132,6 +165,19 @@ class ReportSummary:
     cohort_count: int
     statuses: tuple[str, ...] = ()
 
+@dataclass(frozen=True)
+class DashCohortDefSummary:
+    dash_cohort_def_id: int
+    dash_cohort_def_name: str
+    dash_cohort_def_short_name: str
+    measure_id: int 
+
+@dataclass(frozen=True)
+class DashCohortDefWorkspace:
+    dash_cohort_def_id: int
+    dash_cohort_def_name: str
+    dash_cohort_def_short_name: str
+    measure_id: int
 
 @dataclass(frozen=True)
 class ReportWorkspace:
@@ -164,6 +210,8 @@ class EntityDetail:
     allowed_actions: Mapping[str, bool]
     executability: str | None = None
     rule_status: RuleStatus | None = None
+    execution_issues: tuple[ExecutionIssue, ...] = ()
+    detail_view: TailoredDetailView | None = None
 
 
 @dataclass(frozen=True)

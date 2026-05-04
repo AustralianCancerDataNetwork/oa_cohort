@@ -11,20 +11,28 @@ from .models import (
     ParentRef,
     RelationKind,
     ReportSummary,
+    DashCohortDefSummary,
     ReportWorkspace,
     SQLPreview,
     SQLVariant,
     UsageSummary,
     ValidationResult,
+    DashCohortDefWorkspace
 )
 
-
 class AuthoringService:
+
+    def list_cohorts(self, session: so.Session) -> list[DashCohortDefSummary]:
+        return loaders.list_cohorts(session)
+    
     def list_reports(self, session: so.Session) -> list[ReportSummary]:
         return loaders.list_reports(session)
 
     def get_report_workspace(self, session: so.Session, report_id: int) -> ReportWorkspace:
         return loaders.load_report_workspace(session, report_id)
+
+    def get_dash_cohort_workspace_by_short_name(self, session: so.Session, dash_cohort_def_short_name: str) -> DashCohortDefWorkspace:
+        return loaders.load_dash_cohort_workspace_by_short_name(session, dash_cohort_def_short_name)
 
     def get_report_workspace_by_short_name(
         self,
