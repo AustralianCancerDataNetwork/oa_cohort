@@ -178,6 +178,8 @@ class DashCohortDefWorkspace:
     dash_cohort_def_name: str
     dash_cohort_def_short_name: str
     measure_id: int
+    measure: WorkspaceNode | None = None
+    subquery: WorkspaceNode | None = None
 
 @dataclass(frozen=True)
 class ReportWorkspace:

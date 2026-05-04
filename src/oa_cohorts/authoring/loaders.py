@@ -92,11 +92,16 @@ def load_dash_cohort_workspace(session: so.Session, dash_cohort_def_id: int) -> 
         sa.select(DashCohortDef)
         .where(DashCohortDef.dash_cohort_def_id == dash_cohort_def_id)
     ).scalars().unique().one()
+    m = dash_cohort_def.dash_cohort_measure
+    measure = _workspace_node_for_measure(session, m)
+    subquery = _workspace_node_for_subquery(session, m.subquery) if m.subquery is not None else None
     return DashCohortDefWorkspace(
         dash_cohort_def_id=dash_cohort_def.dash_cohort_def_id,
         dash_cohort_def_name=dash_cohort_def.dash_cohort_def_name,
         dash_cohort_def_short_name=dash_cohort_def.dash_cohort_def_short_name,
-        measure_id=dash_cohort_def.measure_id
+        measure_id=dash_cohort_def.measure_id,
+        measure=measure,
+        subquery=subquery
     )
 
 def load_report_workspace(session: so.Session, report_id: int) -> ReportWorkspace:
