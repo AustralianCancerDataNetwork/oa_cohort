@@ -186,6 +186,7 @@ poetry.lock
 pysqlite3*
 /__MAC*
 /oa-cohorts-workbench/
+/oa-cohort-author/
 /workbench/
 .vscode
 dash.db

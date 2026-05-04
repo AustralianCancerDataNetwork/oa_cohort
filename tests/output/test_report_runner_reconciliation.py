@@ -47,6 +47,10 @@ class FakeIndicator:
     denominator_measure: FakeMeasure
     numerator_measure_id: int
     denominator_measure_id: int
+    numerator_max_days_prior: int | None = None
+    numerator_max_days_post: int | None = None
+    denominator_max_days_prior: int | None = None
+    denominator_max_days_post: int | None = None
 
 
 class FakeReport:
@@ -125,6 +129,7 @@ def build_report(
     cohort_measure: FakeMeasure,
     numerator_measure: FakeMeasure,
     denominator_measure: FakeMeasure,
+    **indicator_kwargs,
 ) -> FakeReport:
     cohort = FakeReportCohort(FakeCohort([FakeDefinition(cohort_measure)]))
     indicator = FakeIndicator(
@@ -133,6 +138,7 @@ def build_report(
         denominator_measure=denominator_measure,
         numerator_measure_id=numerator_measure.measure_id,
         denominator_measure_id=denominator_measure.measure_id,
+        **indicator_kwargs,
     )
     return FakeReport(
         cohorts=[cohort],
@@ -328,6 +334,60 @@ def test_build_pivot_indicators_keeps_nonzero_denominator_resolver_specific():
     assert len(rows) == 2
     assert [row.numerator_value for row in rows] == [True, False]
     assert [row.numerator_date for row in rows] == [date(2024, 2, 5), None]
+
+
+def test_build_pivot_indicators_applies_dynamic_windows_relative_to_cohort_membership_date():
+    cohort_measure = FakeMeasure(10, "cohort", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 1, 1)),
+    ])
+    denominator_measure = FakeMeasure(20, "denominator", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 1, 8)),
+    ])
+    numerator_measure = FakeMeasure(30, "numerator", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 1, 25)),
+    ])
+    report = build_report(
+        cohort_measure=cohort_measure,
+        numerator_measure=numerator_measure,
+        denominator_measure=denominator_measure,
+        numerator_max_days_post=20,
+        denominator_max_days_post=10,
+    )
+    executor = seed_executor(MeasureExecutor(None), cohort_measure, denominator_measure, numerator_measure)
+
+    rows = build_pivot_indicators(report, executor)
+
+    assert len(rows) == 1
+    assert rows[0].denominator_value is True
+    assert rows[0].denominator_date == date(2024, 1, 8)
+    assert rows[0].numerator_value is False
+    assert rows[0].numerator_date is None
+
+
+def test_build_pivot_indicators_applies_row_specific_windows_for_full_cohort_denominator():
+    cohort_measure = FakeMeasure(10, "cohort", [
+        MeasureMember(person_id=1, measure_resolver=111, measure_date=date(2024, 1, 1)),
+        MeasureMember(person_id=1, measure_resolver=222, measure_date=date(2024, 3, 1)),
+    ])
+    denominator_measure = FakeMeasure(0, "full cohort", [])
+    numerator_measure = FakeMeasure(30, "numerator", [
+        MeasureMember(person_id=1, measure_resolver=999, measure_date=date(2024, 2, 1)),
+    ])
+    report = build_report(
+        cohort_measure=cohort_measure,
+        numerator_measure=numerator_measure,
+        denominator_measure=denominator_measure,
+        numerator_max_days_prior=10,
+        numerator_max_days_post=40,
+    )
+    executor = seed_executor(MeasureExecutor(None), cohort_measure, numerator_measure)
+
+    rows = build_pivot_indicators(report, executor)
+
+    assert len(rows) == 2
+    assert [row.measure_resolver for row in rows] == [111, 222]
+    assert [row.numerator_value for row in rows] == [True, False]
+    assert [row.numerator_date for row in rows] == [date(2024, 2, 1), None]
 
 
 def test_build_pivot_indicators_whole_cohort_propagation_does_not_leak_across_people():
