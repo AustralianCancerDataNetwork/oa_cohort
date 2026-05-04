@@ -107,3 +107,6 @@
 ## 0.4.0
 - configuration interface
 - fixed full-cohort resolution
+
+## 0.4.1
+- added functionality for dynamic date windowing
