@@ -80,6 +80,15 @@ def validate_payload(kind: EntityKind, payload: EntityPayload) -> ValidationResu
             messages.append(ValidationMessage("numerator_measure_id", "numerator measure is required"))
         if cleaned.get("denominator_measure_id") is None:
             messages.append(ValidationMessage("denominator_measure_id", "denominator measure is required"))
+        for field in (
+            "numerator_max_days_prior",
+            "numerator_max_days_post",
+            "denominator_max_days_prior",
+            "denominator_max_days_post",
+        ):
+            value = cleaned.get(field)
+            if value is not None and int(value) < 0:
+                messages.append(ValidationMessage(field, f"{field} must be greater than or equal to 0"))
     elif kind is EntityKind.report:
         if not cleaned.get("report_name"):
             messages.append(ValidationMessage("report_name", "report_name is required"))

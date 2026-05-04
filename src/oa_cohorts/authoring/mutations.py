@@ -58,6 +58,10 @@ DIRECT_MUTABLE_FIELDS: dict[EntityKind, frozenset[str]] = {
             "temporal_min_units",
             "temporal_max",
             "temporal_max_units",
+            "numerator_max_days_prior",
+            "numerator_max_days_post",
+            "denominator_max_days_prior",
+            "denominator_max_days_post",
             "benchmark",
             "benchmark_unit",
         }
@@ -252,6 +256,10 @@ def clone_for_edit(session: so.Session, kind: EntityKind, entity_id: int, parent
                 temporal_min_units=entity.temporal_min_units,
                 temporal_max=entity.temporal_max,
                 temporal_max_units=entity.temporal_max_units,
+                numerator_max_days_prior=entity.numerator_max_days_prior,
+                numerator_max_days_post=entity.numerator_max_days_post,
+                denominator_max_days_prior=entity.denominator_max_days_prior,
+                denominator_max_days_post=entity.denominator_max_days_post,
                 benchmark=entity.benchmark,
                 benchmark_unit=entity.benchmark_unit,
             )

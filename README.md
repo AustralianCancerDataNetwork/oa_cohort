@@ -24,7 +24,7 @@ This is intentionally object-centric: once a report is executed, downstream payl
 * `Report / ReportCohortMap`: Top-level report definition, linking cohorts and indicators.
 * `DashCohort / DashCohortDef`: User-facing cohort groupings backed by executable measures.
 * `Measure / MeasureSQLCompiler / MeasureExecutor`: The core executable units. Measures compile to SQL, execute against a session, and materialise member sets with dating and episode context.
-* `Indicator`: Numerator/denominator semantics over measures, with temporal constraints.
+* `Indicator`: Numerator/denominator semantics over measures, including optional indicator-level relative date windows anchored to report cohort membership.
 * `QueryRule (+ subclasses)`: The rule DSL: exact matches, hierarchies, exclusions, scalar thresholds, phenotypes, substring matches, etc.
 * `HTMLRenderable mixins`: Lightweight visualisation of structure, SQL previews, and executability for debugging and exploration.
 
@@ -37,6 +37,24 @@ report.assert_executed()
 rows = report.members(executor)    # all cohort members
 indicators = report.indicators     # output rows are built per denominator member within the report cohort
 ```
+
+### Indicator-relative date windows
+
+Indicators can optionally define dynamic numerator and denominator date windows using:
+
+* `numerator_max_days_prior`
+* `numerator_max_days_post`
+* `denominator_max_days_prior`
+* `denominator_max_days_post`
+
+These windows are evaluated relative to the report cohort membership date, not globally on the reusable measure definition. This keeps measures portable while allowing the same measure to participate in different indicators with different timing requirements.
+
+Execution semantics:
+
+* measures still execute broadly and materialise their full `MeasureMember` sets
+* indicator row assembly then narrows numerator and denominator rows relative to the in-scope report cohort membership date
+* when the denominator is the full report cohort (`measure_id = 0`), filtering is still evaluated per cohort membership row so different in-scope episodes for the same person can qualify differently
+* if a window is configured and either the anchor date or candidate member date is missing, that candidate does not satisfy the dated comparison
 
 ### Status
 
