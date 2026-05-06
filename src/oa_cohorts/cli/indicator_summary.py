@@ -1,3 +1,5 @@
+"""CLI-facing helpers for loading compact indicator summary views from ORM models."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -13,6 +15,8 @@ from oa_cohorts.query.subquery import Subquery
 
 @dataclass(frozen=True)
 class IndicatorSummary:
+    """Compact report-scoped indicator summary used for list and table views."""
+
     report_id: int
     report_name: str
     report_short_name: str
@@ -31,6 +35,8 @@ class IndicatorSummary:
 
 @dataclass(frozen=True)
 class MeasureSummary:
+    """Normalized measure summary embedded inside detailed indicator output."""
+
     measure_id: int
     name: str
     combination: str
@@ -44,6 +50,8 @@ class MeasureSummary:
 
 @dataclass(frozen=True)
 class IndicatorDetailSummary:
+    """Detailed indicator summary with report memberships and resolved measure metadata."""
+
     indicator_id: int
     description: str
     reference: str | None
@@ -57,6 +65,8 @@ class IndicatorDetailSummary:
 
 
 def has_indicator_summary_tables(session: so.Session) -> bool:
+    """Return whether the minimum schema required for indicator summary queries exists."""
+
     bind = session.get_bind()
     inspector = sa.inspect(bind)
     return all(
@@ -72,6 +82,12 @@ def has_indicator_summary_tables(session: so.Session) -> bool:
 
 
 def load_indicator_summaries(session: so.Session, *, report_id: int) -> list[IndicatorSummary]:
+    """Load summaries for all indicators attached to a report.
+
+    Returns an empty list when the required tables are unavailable or the report
+    does not exist.
+    """
+
     if not has_indicator_summary_tables(session):
         return []
 
@@ -91,6 +107,8 @@ def load_indicator_summaries(session: so.Session, *, report_id: int) -> list[Ind
 
 
 def load_report_brief(session: so.Session, *, report_id: int) -> tuple[str, str] | None:
+    """Return the report name and short name for a report, if available."""
+
     if not has_indicator_summary_tables(session):
         return None
 
@@ -106,6 +124,8 @@ def load_indicator_detail_summary(
     *,
     indicator_id: int,
 ) -> IndicatorDetailSummary | None:
+    """Load a detailed summary for a single indicator and its related measures."""
+
     if not has_indicator_summary_tables(session):
         return None
 
@@ -145,6 +165,8 @@ def load_indicator_detail_summary(
 
 
 def _to_summary(report: Report, indicator: Indicator) -> IndicatorSummary:
+    """Normalize a report-indicator pair into an immutable summary view."""
+
     return IndicatorSummary(
         report_id=report.report_id,
         report_name=report.report_name,
@@ -164,6 +186,8 @@ def _to_summary(report: Report, indicator: Indicator) -> IndicatorSummary:
 
 
 def _render_temporal_summary(indicator: Indicator) -> str:
+    """Render temporal indicator constraints as a compact summary string."""
+
     parts: list[str] = []
     if indicator.temporal_early is not None:
         parts.append(f"early={indicator.temporal_early.value}")
@@ -179,6 +203,8 @@ def _render_temporal_summary(indicator: Indicator) -> str:
 
 
 def _render_benchmark_summary(indicator: Indicator) -> str:
+    """Render benchmark metadata as a compact display string."""
+
     if indicator.benchmark is None:
         return "-"
     unit = indicator.benchmark_unit or ""
@@ -186,6 +212,8 @@ def _render_benchmark_summary(indicator: Indicator) -> str:
 
 
 def _to_measure_summary(measure: Measure) -> MeasureSummary:
+    """Normalize a measure ORM object into an immutable summary dataclass."""
+
     subquery = measure.subquery
     child_measure_names = tuple(sorted(link.child.name for link in measure.child_links if link.child is not None))
     return MeasureSummary(
