@@ -66,7 +66,10 @@ class PhenotypeDefinition(HTMLRenderable, Base):
 
     phenotype_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('phenotype.phenotype_id'), primary_key=True)
     id = so.synonym('phenotype_id')
-    query_concept_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('concept.concept_id'), primary_key=True, default=0)    
+    # Query concept ids are intentionally stored without a schema-level foreign
+    # key so config import can preserve unresolved concept references until the
+    # relevant vocabulary is loaded.
+    query_concept_id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True, default=0)
 
     phenotype: so.Mapped['Phenotype'] = so.relationship(
         "Phenotype",
@@ -76,6 +79,7 @@ class PhenotypeDefinition(HTMLRenderable, Base):
 
     concept: so.Mapped['Concept'] = so.relationship(
         "Concept",
+        primaryjoin=lambda: so.foreign(PhenotypeDefinition.query_concept_id) == Concept.concept_id,
         foreign_keys=[query_concept_id],
     )
 

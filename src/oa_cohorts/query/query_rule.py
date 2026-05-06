@@ -30,8 +30,11 @@ class QueryRule(Base, HTMLRenderable):
 
     query_rule_id: so.Mapped[int] = so.mapped_column(primary_key=True)
     matcher: so.Mapped[RuleMatcher] = so.mapped_column(sa.Enum(RuleMatcher))
+    # Concept references are intentionally not schema-enforced here. Config import
+    # and authoring need to tolerate unresolved concept ids so they can surface
+    # missing-vocabulary problems at execution time instead of failing on write.
     concept_id: so.Mapped[int] = so.mapped_column(
-        sa.ForeignKey("concept.concept_id"), nullable=True, index=True
+        sa.Integer, nullable=True, index=True
     )
     notes: so.Mapped[str | None] = so.mapped_column(sa.String, nullable=True)
 
@@ -49,7 +52,11 @@ class QueryRule(Base, HTMLRenderable):
     }
 
     # relationships
-    concept: so.Mapped[Concept | None] = so.relationship(Concept, lazy="select")
+    concept: so.Mapped[Concept | None] = so.relationship(
+        Concept,
+        primaryjoin=lambda: so.foreign(QueryRule.concept_id) == Concept.concept_id,
+        lazy="select",
+    )
     phenotype: so.Mapped[Phenotype | None] = so.relationship(Phenotype,lazy="joined")
 
     @property

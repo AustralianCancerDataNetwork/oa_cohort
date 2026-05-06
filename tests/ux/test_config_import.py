@@ -306,6 +306,38 @@ def test_import_config_directory_deduplicates_and_loads_rows(tmp_path):
         assert _table_count(session, Base.metadata.tables["measure_relationship"]) == 2
 
 
+def test_import_config_directory_tolerates_unresolved_concept_references(tmp_path):
+    config_dir = _build_config_dir(tmp_path / "config")
+    engine = sa.create_engine("sqlite://")
+    session_factory = so.sessionmaker(bind=engine, future=True)
+
+    with session_factory() as session:
+        results = import_config_directory(config_dir, session)
+        by_table = _result_lookup(results)
+
+        assert by_table["query_rule"].inserted_rows == 2
+        assert by_table["phenotype_definition"].inserted_rows == 2
+
+        query_rule_table = Base.metadata.tables["query_rule"]
+        phenotype_definition_table = Base.metadata.tables["phenotype_definition"]
+
+        query_rule_concepts = {
+            row["concept_id"]
+            for row in session.execute(sa.select(query_rule_table)).mappings()
+            if row["concept_id"] is not None
+        }
+        phenotype_concepts = {
+            row["query_concept_id"]
+            for row in session.execute(sa.select(phenotype_definition_table)).mappings()
+        }
+
+        assert query_rule_concepts == {36561408}
+        assert phenotype_concepts == {36561408, 44500480}
+
+    inspector = sa.inspect(engine)
+    assert inspector.has_table("concept") is False
+
+
 def test_reimport_skips_existing_and_replaces_changed_rows(tmp_path):
     config_dir = _build_config_dir(tmp_path / "config")
     engine = sa.create_engine("sqlite://")
