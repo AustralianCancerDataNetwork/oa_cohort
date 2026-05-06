@@ -110,3 +110,6 @@
 
 ## 0.4.1
 - added functionality for dynamic date windowing
+
+## 0.4.2
+- up-version omop-alchemy & set minimum versions for other dependabot alerts
