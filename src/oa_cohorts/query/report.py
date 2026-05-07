@@ -4,13 +4,11 @@ from itertools import chain
 
 import sqlalchemy as sa
 import sqlalchemy.orm as so
-from sqlalchemy.ext.hybrid import hybrid_property
 from orm_loader.helpers import Base, get_logger
 from sqlalchemy.ext.associationproxy import association_proxy
 
 from oa_cohorts.query.measure import MeasureMember, MeasureExecutor
 from ..core.html_utils import HTMLRenderable, RawHTML, esc, td, exec_badge, table
-from ..core import ReportStatus
 from ..core.executability import ExecStatus
 from .typing import PersonFilter
 
@@ -97,7 +95,6 @@ class Report(HTMLRenderable, Base):
 
     - One or more DashCohorts (population definitions)
     - One or more Indicators (numerator/denominator logic)
-    - Version metadata
 
     Responsibilities
     ----------------
@@ -128,13 +125,6 @@ class Report(HTMLRenderable, Base):
         secondary=report_indicator_map,
         back_populates="in_reports",
         lazy="selectin",
-    )
-
-    report_versions: so.Mapped[list["ReportVersion"]] = so.relationship(
-        "ReportVersion",
-        back_populates="report",
-        lazy="selectin",
-        cascade="all, delete-orphan",
     )
 
     denominator_measures = association_proxy("indicators", "denominator_measure")
@@ -210,15 +200,6 @@ class Report(HTMLRenderable, Base):
             if m.measure_id != 0 and m._members is None:
                 raise RuntimeError(f"Measure {m.measure_id} not executed")
 
-    @hybrid_property
-    def version_string(self):
-        if self.report_versions:
-            return '; '.join(
-                f'{rv.report_version_major}.{rv.report_version_minor} ({rv.report_version_label})'
-                for rv in self.report_versions
-            )
-        return ""
-
     def __repr__(self):
         return f"<Report {self.report_short_name!r} ({len(self.indicators)} indicators)>"
 
@@ -236,9 +217,6 @@ class Report(HTMLRenderable, Base):
 
         if self.report_owner:
             hdr["Owner"] = self.report_owner
-
-        if self.version_string:
-            hdr["Versions"] = self.version_string
 
         return hdr
 
@@ -386,43 +364,3 @@ class Report(HTMLRenderable, Base):
             blocks.append(RawHTML("<div class='muted'><i>No indicators</i></div>"))
 
         return blocks
-    
-class ReportVersion(HTMLRenderable, Base):
-    """Report versioning table. There should be only one current version per report."""
-    __tablename__ = 'report_version'
-
-    report_version_id: so.Mapped[int] = so.mapped_column(sa.Integer, primary_key=True)
-    id = so.synonym('report_version_id')
-
-    report_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('report.report_id'))
-
-    report_version_major: so.Mapped[int] = so.mapped_column(sa.Integer)
-    report_version_minor: so.Mapped[int] = so.mapped_column(sa.Integer)
-    report_version_label: so.Mapped[str] = so.mapped_column(sa.String(50))
-    report_version_date: so.Mapped[date] = so.mapped_column(sa.DateTime)
-    report_status: so.Mapped['ReportStatus'] = so.mapped_column(sa.Enum(ReportStatus))
-
-    report: so.Mapped["Report"] = so.relationship(back_populates='report_versions')
-
-    def __repr__(self):
-        return (
-            f"<ReportVersion {self.report_version_major}."
-            f"{self.report_version_minor} "
-            f"[{self.report_version_label}] {self.report_status.value}>"
-        )
-
-    def _html_css_class(self) -> str:
-        return "report-version"
-
-    def _html_title(self) -> str:
-        return f"Version {self.report_version_major}.{self.report_version_minor}"
-
-    def _html_header(self) -> dict[str, str]:
-        return {
-            "Label": self.report_version_label,
-            "Status": self.report_status.value,
-            "Date": str(self.report_version_date),
-        }
-
-    def _html_inner(self):
-        return []

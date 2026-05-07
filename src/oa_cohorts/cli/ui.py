@@ -188,8 +188,6 @@ def render_report_summaries(summaries: list[ReportSummary]) -> Panel | Table:
         grid.add_row("Short name", summary.report_short_name)
         grid.add_row("Author", summary.author)
         grid.add_row("Owner", summary.owner or "-")
-        grid.add_row("Versions", summary.versions or "-")
-        grid.add_row("Statuses", ", ".join(summary.statuses) or "-")
         grid.add_row("Cohorts", ", ".join(summary.cohort_names) or "-")
         grid.add_row("Primary cohorts", ", ".join(summary.primary_cohort_names) or "-")
         grid.add_row("Indicator count", str(summary.indicator_count))
@@ -200,8 +198,6 @@ def render_report_summaries(summaries: list[ReportSummary]) -> Panel | Table:
     table.add_column("ID", justify="right", style="cyan")
     table.add_column("Short Name", style="cyan")
     table.add_column("Name")
-    table.add_column("Versions")
-    table.add_column("Statuses")
     table.add_column("Cohorts", justify="right")
     table.add_column("Primary Cohorts")
     table.add_column("Indicators", justify="right")
@@ -212,8 +208,6 @@ def render_report_summaries(summaries: list[ReportSummary]) -> Panel | Table:
             str(summary.report_id),
             summary.report_short_name,
             summary.report_name,
-            summary.versions or "-",
-            ", ".join(summary.statuses) or "-",
             str(summary.cohort_count),
             ", ".join(summary.primary_cohort_names) or "-",
             str(summary.indicator_count),

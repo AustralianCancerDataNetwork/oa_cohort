@@ -25,7 +25,6 @@ from ..query import (
     QueryRule,
     Report,
     ReportCohortMap,
-    ReportVersion,
     Subquery,
     dash_cohort_def_map,
     report_indicator_map,
@@ -411,13 +410,6 @@ CONFIG_IMPORT_SPECS: tuple[TableImportSpec, ...] = (
         filenames=("report_cohort_map.csv",),
         value_transforms={
             "primary_cohort": parse_bool,
-        },
-    ),
-    TableImportSpec(
-        table=ReportVersion.__table__,
-        filenames=("report_version.csv",),
-        value_transforms={
-            "report_status": lambda value: value.removeprefix("st_") if isinstance(value, str) else value,
         },
     ),
     TableImportSpec(

@@ -16,8 +16,6 @@ class ReportSummary:
     description: str
     author: str
     owner: str | None
-    versions: str
-    statuses: tuple[str, ...]
     cohort_count: int
     cohort_names: tuple[str, ...]
     primary_cohort_names: tuple[str, ...]
@@ -38,7 +36,6 @@ def load_report_summaries(
         .options(
             so.selectinload(Report.cohorts).selectinload(ReportCohortMap.cohort),
             so.selectinload(Report.indicators),
-            so.selectinload(Report.report_versions),
         )
         .order_by(Report.report_id)
     )
@@ -74,8 +71,6 @@ def _to_summary(report: Report) -> ReportSummary:
             if rc.primary_cohort and rc.cohort is not None
         )
     )
-    statuses = tuple(sorted({version.report_status.value for version in report.report_versions}))
-
     return ReportSummary(
         report_id=report.report_id,
         report_name=report.report_name,
@@ -83,8 +78,6 @@ def _to_summary(report: Report) -> ReportSummary:
         description=report.report_description or "",
         author=report.report_author,
         owner=report.report_owner,
-        versions=report.version_string or "",
-        statuses=statuses,
         cohort_count=len(report.cohorts),
         cohort_names=cohort_names,
         primary_cohort_names=primary_cohort_names,
