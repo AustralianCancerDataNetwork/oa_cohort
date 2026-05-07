@@ -113,3 +113,6 @@
 
 ## 0.4.2
 - up-version omop-alchemy & set minimum versions for other dependabot alerts
+
+## 0.5.0
+- removed report version table because we added cohort library and authorship service support, so it was no longer a value-add and just confused things

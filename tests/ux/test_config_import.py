@@ -245,29 +245,6 @@ def _build_config_dir(config_dir: Path) -> Path:
         ],
     )
     _write_csv(
-        config_dir / "report_version.csv",
-        [
-            "report_version_id",
-            "report_id",
-            "report_version_major",
-            "report_version_minor",
-            "report_version_label",
-            "report_version_date",
-            "report_status",
-        ],
-        [
-            {
-                "report_version_id": 1,
-                "report_id": 1,
-                "report_version_major": 0,
-                "report_version_minor": 1,
-                "report_version_label": "alpha",
-                "report_version_date": "2024-05-15",
-                "report_status": "draft",
-            },
-        ],
-    )
-    _write_csv(
         config_dir / "report_indicator_map.csv",
         ["report_id", "indicator_id"],
         [
@@ -428,7 +405,6 @@ def test_progress_callback_emits_deterministic_events_and_skips_write_on_dry_run
 
 def test_clean_row_supports_legacy_columns_and_values():
     measure_spec = next(spec for spec in CONFIG_IMPORT_SPECS if spec.table.name == "measure")
-    report_version_spec = next(spec for spec in CONFIG_IMPORT_SPECS if spec.table.name == "report_version")
     subquery_spec = next(spec for spec in CONFIG_IMPORT_SPECS if spec.table.name == "subquery")
 
     measure_row = _clean_row(
@@ -440,18 +416,6 @@ def test_clean_row_supports_legacy_columns_and_values():
             "person_ep_override": "t",
         },
         measure_spec,
-    )
-    report_version_row = _clean_row(
-        {
-            "report_version_id": "1",
-            "report_id": "1",
-            "report_version_major": "0",
-            "report_version_minor": "1",
-            "report_version_label": "alpha",
-            "report_version_date": "2024-05-15",
-            "report_status": "st_draft",
-        },
-        report_version_spec,
     )
     subquery_row = _clean_row(
         {
@@ -467,7 +431,6 @@ def test_clean_row_supports_legacy_columns_and_values():
 
     assert measure_row["combination"].value == "or"
     assert measure_row["person_ep_override"] is True
-    assert report_version_row["report_status"].value == "draft"
     assert subquery_row["name"] == "Curative RT"
     assert subquery_row["target"].value == "intent_rt"
 
@@ -535,7 +498,6 @@ def test_report_summary_cli_prints_existing_report_details(tmp_path):
     assert "Report Summary" in result.stdout
     assert "Test report" in result.stdout
     assert "test" in result.stdout
-    assert "0.1 (alpha)" in result.stdout
     assert "Test cohort" in result.stdout
 
 
