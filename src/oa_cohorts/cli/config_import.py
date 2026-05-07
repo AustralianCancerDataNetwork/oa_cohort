@@ -40,7 +40,6 @@ ImportProgressCallback = Callable[["ImportProgressEvent"], None]
 class TableImportSpec:
     table: sa.Table
     filenames: tuple[str, ...]
-    legacy_columns: dict[str, str] = field(default_factory=dict)
     value_transforms: dict[str, RowTransform] = field(default_factory=dict)
 
     @property
@@ -105,16 +104,15 @@ def _coerce_value(column: sa.Column[Any], value: Any) -> Any:
     return coerce_column_value(column, value)
 
 
-def _normalise_header(row: dict[str, str], spec: TableImportSpec) -> dict[str, str]:
+def _normalise_header(row: dict[str, str]) -> dict[str, str]:
     normalised: dict[str, str] = {}
     for key, value in row.items():
         clean_key = key.strip()
-        mapped_key = spec.legacy_columns.get(clean_key, clean_key)
-        if mapped_key in normalised and normalised[mapped_key] != value:
+        if clean_key in normalised and normalised[clean_key] != value:
             raise ValueError(
-                f"CSV for {spec.table.name} contains conflicting values for column {mapped_key!r}"
+                f"CSV contains conflicting values for column {clean_key!r}"
             )
-        normalised[mapped_key] = value
+        normalised[clean_key] = value
     return normalised
 
 
@@ -127,7 +125,7 @@ def _required_columns(table: sa.Table) -> set[str]:
 
 
 def _clean_row(raw_row: dict[str, str], spec: TableImportSpec) -> dict[str, Any]:
-    row = _normalise_header(raw_row, spec)
+    row = _normalise_header(raw_row)
     available_columns = {column.name: column for column in spec.table.columns}
     cleaned: dict[str, Any] = {}
 
@@ -349,35 +347,19 @@ CONFIG_IMPORT_SPECS: tuple[TableImportSpec, ...] = (
     TableImportSpec(
         table=QueryRule.__table__,
         filenames=("query_rule.csv",),
-        legacy_columns={
-            "query_matcher": "matcher",
-            "query_concept_id": "concept_id",
-            "query_notes": "notes",
-        },
     ),
     TableImportSpec(
         table=Subquery.__table__,
         filenames=("subquery.csv",),
-        legacy_columns={
-            "subquery_target": "target",
-            "subquery_temporality": "temporality",
-            "subquery_name": "name",
-            "subquery_short_name": "short_name",
-        },
     ),
     TableImportSpec(
         table=subquery_rule_map,
-        filenames=("subquery_rule_map.csv", "query_rule_map.csv"),
+        filenames=("subquery_rule_map.csv",),
     ),
     TableImportSpec(
         table=Measure.__table__,
         filenames=("measure.csv",),
-        legacy_columns={
-            "measure_name": "name",
-            "measure_combination": "combination",
-        },
         value_transforms={
-            "combination": lambda value: value.removeprefix("rule_") if isinstance(value, str) else value,
             "person_ep_override": parse_bool,
         },
     ),
