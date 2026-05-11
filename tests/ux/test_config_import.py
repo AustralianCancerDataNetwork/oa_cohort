@@ -403,15 +403,18 @@ def test_progress_callback_emits_deterministic_events_and_skips_write_on_dry_run
     assert phenotype_events == ["load", "dedupe", "compare", "complete"]
 
 
-def test_clean_row_supports_legacy_columns_and_values():
+def test_clean_row_supports_current_columns_and_values():
     measure_spec = next(spec for spec in CONFIG_IMPORT_SPECS if spec.table.name == "measure")
     subquery_spec = next(spec for spec in CONFIG_IMPORT_SPECS if spec.table.name == "subquery")
+    query_rule_map_spec = next(
+        spec for spec in CONFIG_IMPORT_SPECS if spec.table.name == "subquery_rule_map"
+    )
 
     measure_row = _clean_row(
         {
             "measure_id": "55",
-            "measure_name": "Bronchial Cancer - SNOMED",
-            "measure_combination": "rule_or",
+            "name": "Bronchial Cancer - SNOMED",
+            "combination": "or",
             "subquery_id": "123",
             "person_ep_override": "t",
         },
@@ -420,11 +423,10 @@ def test_clean_row_supports_legacy_columns_and_values():
     subquery_row = _clean_row(
         {
             "subquery_id": "85",
-            "subquery_name": "Curative RT",
-            "subquery_short_name": "curative_rt",
-            "subquery_type": "tx_rule",
-            "subquery_temporality": "dt_rad",
-            "subquery_target": "intent_rt",
+            "name": "Curative RT",
+            "short_name": "curative_rt",
+            "temporality": "dt_rad",
+            "target": "intent_rt",
         },
         subquery_spec,
     )
@@ -433,6 +435,7 @@ def test_clean_row_supports_legacy_columns_and_values():
     assert measure_row["person_ep_override"] is True
     assert subquery_row["name"] == "Curative RT"
     assert subquery_row["target"].value == "intent_rt"
+    assert query_rule_map_spec.filenames == ("subquery_rule_map.csv",)
 
 
 def test_cli_main_imports_configs(tmp_path):
