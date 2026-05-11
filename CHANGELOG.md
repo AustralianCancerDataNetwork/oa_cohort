@@ -116,3 +116,9 @@
 
 ## 0.5.0
 - removed report version table because we added cohort library and authorship service support, so it was no longer a value-add and just confused things
+
+## 0.5.1 
+- removed stale import logic
+
+## 0.5.2
+- concurrent treatment measurable

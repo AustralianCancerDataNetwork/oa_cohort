@@ -90,3 +90,15 @@ class TxDaysToStartTreatment(TreatmentEnvelopeMV, MeasurableBase, Base):
         value_concept_attr="condition_episode",  
         value_numeric_attr="days_from_dx_to_treatment"
     )
+
+
+class TxConcurrentChemoRT(TreatmentEnvelopeMV, MeasurableBase, Base):
+    __measurable__ = MeasurableSpec(
+        domain=MeasurableDomain.tx,
+        label="Concurrent Chemotherapy and Radiotherapy",
+        person_id_attr="person_id",
+        episode_id_attr="condition_episode",
+        event_date_attr="condition_start_date",        
+        value_concept_attr="condition_episode",  
+        value_predicate_attr="concurrent_chemo_rt"
+    )
