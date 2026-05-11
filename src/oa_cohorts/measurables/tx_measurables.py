@@ -100,5 +100,5 @@ class TxConcurrentChemoRT(TreatmentEnvelopeMV, MeasurableBase, Base):
         episode_id_attr="condition_episode",
         event_date_attr="condition_start_date",        
         value_concept_attr="condition_episode",  
-        value_predicate_attr="concurrent_chemo_rt"
+        value_predicate_attr="concurrent_chemort"
     )
