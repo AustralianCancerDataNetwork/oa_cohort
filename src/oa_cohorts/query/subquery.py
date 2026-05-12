@@ -73,12 +73,26 @@ class Subquery(HTMLRenderable, Base):
         use_numeric = any(r.requires_numeric for r in self.rules)
         use_string = any(r.requires_string for r in self.rules) 
         use_predicate = any(r.requires_predicate for r in self.rules)
+        scalar_rules = [r for r in self.rules if r.requires_numeric]
+        scalar_needs_concept = any(r.concept_id != 0 for r in scalar_rules)
+        scalar_only = bool(scalar_rules) and len(scalar_rules) == len(self.rules)
         specs = measurable.__bound_measurable__
 
         col = specs.value_concept_col
         if use_numeric:
             val_col = specs.value_numeric_col
-            kind = "numeric"
+            if val_col is None:
+                raise ValueError(
+                    f"{measurable.__name__} does not expose a numeric value column "
+                    f"for scalar filtering in subquery {self.subquery_id}"
+                )
+
+            # Threshold-only scalar subqueries do not use the concept field:
+            # ScalarRule short-circuits the concept clause to TRUE when concept_id == 0.
+            if scalar_only and not scalar_needs_concept:
+                return val_col
+
+            kind = "concept"
         elif use_string:
             # special case - string based filters are looking for CONCEPT CODE filters, not 
             # actually string values in the sense of 'value_as_string' fields...
@@ -96,6 +110,12 @@ class Subquery(HTMLRenderable, Base):
             kind = "concept"
 
         if val_col is None or col is None:
+            if use_numeric and col is None and scalar_needs_concept:
+                raise ValueError(
+                    f"{measurable.__name__} does not expose a concept value column "
+                    f"for subquery {self.subquery_id}; scalar concept filtering "
+                    f"requires value_concept_attr when concept_id != 0"
+                )
             raise ValueError(
                 f"{measurable.__name__} does not expose required {kind} value column "
                 f"for subquery {self.subquery_id}"

@@ -1316,7 +1316,7 @@ wheels = [
 
 [[package]]
 name = "oa-cohorts"
-version = "0.5.3"
+version = "0.5.4"
 source = { editable = "." }
 dependencies = [
     { name = "omop-alchemy" },
