@@ -109,10 +109,10 @@ class QueryRule(Base, HTMLRenderable):
 
         return (
              self.concept_id is None,
-             self.concept_id,
+             self.concept_id if self.concept_id is not None else -1,
         ) < (
              other.concept_id is None,
-             other.concept_id,
+             other.concept_id if other.concept_id is not None else -1,
         )
 
     def __repr__(self) -> str:
