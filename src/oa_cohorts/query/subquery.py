@@ -5,6 +5,7 @@ from orm_loader.helpers import Base
 from .query_rule import QueryRule
 from ..core import RuleTarget, RuleTemporality
 from ..measurables import get_measurable_registry, MeasurableBase
+from ..measurables.measurable_base import SQLCol
 from ..core.html_utils import HTMLRenderable, RawHTML, esc, HTMLChild
 
 from sqlalchemy.sql import Select, CompoundSelect
@@ -76,7 +77,7 @@ class Subquery(HTMLRenderable, Base):
         except KeyError:
             raise KeyError(f"No measurable registered for target {self.target}")
 
-    def filter_field(self, measurable: type[MeasurableBase]) -> sa.ColumnElement[bool]:
+    def filter_field(self, measurable: type[MeasurableBase]) -> SQLCol:
         """
         Choose concept vs numeric value column depending on rule types.
         """
