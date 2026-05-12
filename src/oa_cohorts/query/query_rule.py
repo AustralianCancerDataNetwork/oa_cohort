@@ -34,7 +34,7 @@ class QueryRule(Base, HTMLRenderable):
     # Concept references are intentionally not schema-enforced here. Config import
     # and authoring need to tolerate unresolved concept ids so they can surface
     # missing-vocabulary problems at execution time instead of failing on write.
-    concept_id: so.Mapped[int] = so.mapped_column(
+    concept_id: so.Mapped[int | None] = so.mapped_column(
         sa.Integer, nullable=True, index=True
     )
     notes: so.Mapped[str | None] = so.mapped_column(sa.String, nullable=True)
@@ -107,7 +107,13 @@ class QueryRule(Base, HTMLRenderable):
         if self.query_rule_id != other.query_rule_id:
             return self.query_rule_id < other.query_rule_id
 
-        return self.concept_id < other.concept_id
+        return (
+             self.concept_id is None,
+             self.concept_id,
+        ) < (
+             other.concept_id is None,
+             other.concept_id,
+        )
 
     def __repr__(self) -> str:
         parts = [f"id={self.query_rule_id}", self.matcher.value]
@@ -366,7 +372,8 @@ class ScalarRule(QueryRule):
             raise RuntimeError(f'Scalar threshold is not set on rule {self.query_rule_id}')
         if not self.concept and not self.concept_id == 0:
             raise RuntimeError(f'Rule concept {self.concept_id} not found')
-        return self.scalar_threshold, self.concept_id
+        concept_id = self.concept_id if self.concept_id is not None else 0
+        return self.scalar_threshold, concept_id
 
     @property
     def scalar_field(self):
@@ -450,7 +457,7 @@ class PredicateRule(QueryRule):
             concept_id = 1: predicate must be TRUE
             concept_id = 0: predicate must be FALSE
         """
-        if self.concept_id == 0:
+        if self.concept_id is None:
             return True
         return bool(self.concept_id)
     
