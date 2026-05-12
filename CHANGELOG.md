@@ -125,3 +125,6 @@
 
 ## 0.5.3 
 - better typing in measurable base
+
+## 0.5.4
+- changes to handling of scalar queries to support ones that truly do not have a concept_id column that is mapped

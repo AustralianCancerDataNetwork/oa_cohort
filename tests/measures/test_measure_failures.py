@@ -1,5 +1,36 @@
 import pytest
+import sqlalchemy as sa
+from types import SimpleNamespace
+from oa_cohorts.core import RuleMatcher, RuleTarget, RuleTemporality, ThresholdDirection
+from oa_cohorts.measurables.measurable_base import MeasurableBase, MeasurableDomain, MeasurableSpec
+from oa_cohorts.query.query_rule import ScalarRule
+from oa_cohorts.query.subquery import Subquery
 from oa_cohorts.query.measure import MeasureExecutor, MeasureSQLCompiler
+
+
+referral_events = sa.table(
+    "referral_events",
+    sa.column("person_id"),
+    sa.column("episode_id"),
+    sa.column("initial_gp_referral"),
+    sa.column("referral_to_specialist"),
+)
+
+
+class ReferralWindowMeasurable(MeasurableBase):
+    __measurable__ = MeasurableSpec(
+        domain=MeasurableDomain.tx,
+        label="Referral window",
+        person_id_attr="person_id",
+        episode_id_attr="episode_id",
+        event_date_attr="initial_gp_referral",
+        value_numeric_attr="referral_to_specialist",
+    )
+
+    person_id = referral_events.c.person_id
+    episode_id = referral_events.c.episode_id
+    initial_gp_referral = referral_events.c.initial_gp_referral
+    referral_to_specialist = referral_events.c.referral_to_specialist
 
 def test_measure_zero_cannot_execute(db, measure_zero):
 
@@ -54,5 +85,57 @@ def test_subquery_unknown_target(subquery_unknown_target):
         subquery_unknown_target.sql_any()
 
 def test_subquery_missing_numeric_column(subquery_scalar_rule):
-    with pytest.raises(ValueError, match="does not expose required numeric"):
+    with pytest.raises(ValueError, match="does not expose a numeric value column"):
         subquery_scalar_rule.sql_any()
+
+
+def test_referral_window_subquery_exposes_numeric_column(patch_measurable_registry):
+    patch_measurable_registry[RuleTarget.referral_to_specialist_window] = ReferralWindowMeasurable
+
+    subquery = Subquery(
+        subquery_id=106,
+        name="GP referral to first specialist seen < 14d",
+        short_name="first_spec",
+        target=RuleTarget.referral_to_specialist_window,
+        temporality=RuleTemporality.dt_consult,
+        rules=[
+            ScalarRule(
+                query_rule_id=143,
+                matcher=RuleMatcher.scalar,
+                concept_id=0,
+                scalar_threshold=14,
+                threshold_direction=ThresholdDirection.lt,
+                threshold_comparator=RuleTarget.referral_to_specialist_window,
+            )
+        ],
+    )
+
+    sql = subquery.sql_any()
+
+    assert sql is not None
+
+
+def test_referral_window_scalar_concept_filter_requires_concept_column(patch_measurable_registry):
+    patch_measurable_registry[RuleTarget.referral_to_specialist_window] = ReferralWindowMeasurable
+
+    rule = ScalarRule(
+        query_rule_id=144,
+        matcher=RuleMatcher.scalar,
+        concept_id=4139715,
+        scalar_threshold=14,
+        threshold_direction=ThresholdDirection.lt,
+        threshold_comparator=RuleTarget.referral_to_specialist_window,
+    )
+    rule.concept = SimpleNamespace(concept_id=4139715, concept_name="Seen by clinical oncologist")
+
+    subquery = Subquery(
+        subquery_id=107,
+        name="Referral window with concept filter",
+        short_name="first_spec_concept",
+        target=RuleTarget.referral_to_specialist_window,
+        temporality=RuleTemporality.dt_consult,
+        rules=[rule],
+    )
+
+    with pytest.raises(ValueError, match="scalar concept filtering requires value_concept_attr when concept_id != 0"):
+        subquery.sql_any()

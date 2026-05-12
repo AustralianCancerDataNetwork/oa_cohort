@@ -3,9 +3,10 @@ import sqlalchemy as sa
 import sqlalchemy.orm as so
 from orm_loader.helpers import Base
 from omop_alchemy.cdm.model import Concept
+from typing import Any, Iterable
 from ..measurables import get_measurable_registry
 from ..core import RuleMatcher, ThresholdDirection, RuleTarget
-from ..core.html_utils import HTMLRenderable, RawHTML, td, table, render_sql, esc
+from ..core.html_utils import HTMLRenderable, RawHTML, td, table, render_sql, esc, HTMLChild
 from .phenotype import Phenotype
 
 class QueryRule(Base, HTMLRenderable):
@@ -33,7 +34,7 @@ class QueryRule(Base, HTMLRenderable):
     # Concept references are intentionally not schema-enforced here. Config import
     # and authoring need to tolerate unresolved concept ids so they can surface
     # missing-vocabulary problems at execution time instead of failing on write.
-    concept_id: so.Mapped[int] = so.mapped_column(
+    concept_id: so.Mapped[int | None] = so.mapped_column(
         sa.Integer, nullable=True, index=True
     )
     notes: so.Mapped[str | None] = so.mapped_column(sa.String, nullable=True)
@@ -71,7 +72,7 @@ class QueryRule(Base, HTMLRenderable):
     def requires_predicate(self) -> bool:
         return self.matcher == RuleMatcher.predicate
 
-    def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
+    def get_filter_details(self, field: sa.ColumnElement[Any]) -> sa.ColumnElement[bool]:
         """
         Return the SQLAlchemy boolean expression implementing this rule against
         a specific target field.
@@ -91,7 +92,7 @@ class QueryRule(Base, HTMLRenderable):
         """
         raise NotImplementedError("get_filter_details must be implemented on subclasses")
     
-    def sql_preview(self, field: sa.ColumnElement) -> str:
+    def sql_preview(self, field: sa.ColumnElement[Any]) -> str:
         """
         Return a SQL WHERE fragment representing this rule.
         """
@@ -99,10 +100,20 @@ class QueryRule(Base, HTMLRenderable):
         return render_sql(expr)
 
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, QueryRule):
+            return NotImplemented
+
         if self.query_rule_id != other.query_rule_id:
             return self.query_rule_id < other.query_rule_id
-        return self.concept_id < other.concept_id
+
+        return (
+             self.concept_id is None,
+             self.concept_id if self.concept_id is not None else -1,
+        ) < (
+             other.concept_id is None,
+             other.concept_id if other.concept_id is not None else -1,
+        )
 
     def __repr__(self) -> str:
         parts = [f"id={self.query_rule_id}", self.matcher.value]
@@ -154,8 +165,8 @@ class QueryRule(Base, HTMLRenderable):
 
         return hdr
 
-    def _html_inner(self):
-        blocks: list[object] = []
+    def _html_inner(self) -> Iterable[HTMLChild]:
+        blocks: list[HTMLChild] = []
 
         # Optional SQL preview (WHERE clause only)
         try:
@@ -198,7 +209,7 @@ class ExactRule(QueryRule):
             raise RuntimeError(f'Rule concept {self.concept_id} not found')
         return self.concept_id
 
-    def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
+    def get_filter_details(self, field: sa.ColumnElement[Any]) -> sa.ColumnElement[bool]:
         return field.__eq__(self.comparator)
 
 class HierarchyBase(QueryRule):
@@ -232,7 +243,7 @@ class HierarchyBase(QueryRule):
             raise RuntimeError(f'Rule concept {self.concept_id} not found')
         return [c.concept_id for c in self.children]
     
-    def _html_inner(self):
+    def _html_inner(self) -> Iterable[HTMLChild]:
         if not self.children:
             return []
 
@@ -273,7 +284,7 @@ class HierarchyRule(HierarchyBase):
         "polymorphic_identity": RuleMatcher.hierarchy,
     }
 
-    def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
+    def get_filter_details(self, field: sa.ColumnElement[Any]) -> sa.ColumnElement[bool]:
         return field.in_(self.comparator)
 
 class HierarchyExclusionRule(HierarchyBase):
@@ -289,7 +300,7 @@ class HierarchyExclusionRule(HierarchyBase):
         "polymorphic_identity": RuleMatcher.hierarchyexclusion,
     }
 
-    def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
+    def get_filter_details(self, field: sa.ColumnElement[Any]) -> sa.ColumnElement[bool]:
         return field.not_in(self.comparator)
 
 class AbsenceRule(QueryRule):
@@ -311,7 +322,7 @@ class AbsenceRule(QueryRule):
         # this can validly be null or 0
         return self.concept_id
 
-    def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
+    def get_filter_details(self, field: sa.ColumnElement[Any]) -> sa.ColumnElement[bool]:
         return field.is_(None)
 
 class PresenceRule(QueryRule):
@@ -334,7 +345,7 @@ class PresenceRule(QueryRule):
         # this can validly be null or 0
         return self.concept_id
 
-    def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
+    def get_filter_details(self, field: sa.ColumnElement[Any]) -> sa.ColumnElement[bool]:
         return field.is_not(None)
 
 class ScalarRule(QueryRule):
@@ -361,7 +372,8 @@ class ScalarRule(QueryRule):
             raise RuntimeError(f'Scalar threshold is not set on rule {self.query_rule_id}')
         if not self.concept and not self.concept_id == 0:
             raise RuntimeError(f'Rule concept {self.concept_id} not found')
-        return self.scalar_threshold, self.concept_id
+        concept_id = self.concept_id if self.concept_id is not None else 0
+        return self.scalar_threshold, concept_id
 
     @property
     def scalar_field(self):
@@ -386,7 +398,7 @@ class ScalarRule(QueryRule):
             )
         return col
 
-    def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
+    def get_filter_details(self, field: sa.ColumnElement[Any]) -> sa.ColumnElement[bool]:
         threshold, concept = self.comparator
         if self.threshold_direction is None:
             raise RuntimeError(f'Threshold direction is not set on scalar rule {self.query_rule_id}')
@@ -408,9 +420,8 @@ class ScalarRule(QueryRule):
         
         return sa.and_(concept_clause, threshold_clause)    
     
-    def _html_inner(self):
-        bits = []
-
+    def _html_inner(self) -> Iterable[HTMLChild]:
+        bits: list[HTMLChild] = []
         bits.append(RawHTML(f"<div><b>Comparator:</b> {self.threshold_direction.value} {self.scalar_threshold}</div>")) # type: ignore
 
         if self.threshold_comparator:
@@ -451,7 +462,7 @@ class PredicateRule(QueryRule):
         return bool(self.concept_id)
     
 
-    def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
+    def get_filter_details(self, field: sa.ColumnElement[Any]) -> sa.ColumnElement[bool]:
         """
         Apply predicate match.
 
@@ -460,7 +471,7 @@ class PredicateRule(QueryRule):
         return field.is_(self.comparator)
     
 
-    def _html_inner(self):
+    def _html_inner(self) -> Iterable[HTMLChild]:
         state = "TRUE" if self.comparator else "FALSE"
         return [
             RawHTML(f"<div><b>Predicate:</b> {state}</div>")
@@ -492,11 +503,11 @@ class PhenotypeRule(QueryRule):
             raise RuntimeError(f'Rule phenotype {self.phenotype_id} not found')
         return [c.concept_id for c in self.phenotype.phenotype_concepts]
 
-    def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
+    def get_filter_details(self, field: sa.ColumnElement[Any]) -> sa.ColumnElement[bool]:
         return field.in_(self.comparator)
     
 
-    def _html_inner(self):
+    def _html_inner(self) -> Iterable[HTMLChild]:
         if not self.phenotype:
             return []
 
@@ -548,11 +559,11 @@ class SubstringRule(QueryRule):
             raise RuntimeError(f'Rule concept {self.concept_id} not found')
         return self.concept.concept_code
 
-    def get_filter_details(self, field: sa.ColumnElement) -> sa.ColumnElement[bool]:
+    def get_filter_details(self, field: sa.ColumnElement[Any]) -> sa.ColumnElement[bool]:
         return field.ilike(f'%{self.comparator}%')
     
 
-    def _html_inner(self):
+    def _html_inner(self) -> Iterable[HTMLChild]:
         if not self.concept:
             return []
 
