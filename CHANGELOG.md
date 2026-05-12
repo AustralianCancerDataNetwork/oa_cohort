@@ -122,3 +122,6 @@
 
 ## 0.5.2
 - concurrent treatment measurable
+
+## 0.5.3 
+- better typing in measurable base

@@ -1,4 +1,11 @@
-from omop_constructs.alchemy.episodes import SurgicalProcedureMV, DxTreatStartMV, ConditionTreatmentEpisode, TreatmentEnvelopeMV, ConditionTreatmentIntentMV
+from omop_constructs.alchemy.episodes import (
+    SurgicalProcedureMV, 
+    DxTreatStartMV, 
+    ConditionTreatmentEpisode, 
+    TreatmentEnvelopeMV, 
+    ConditionTreatmentIntentMV, 
+    ConsultWindowMV
+)
 from orm_loader.helpers import Base, get_logger
 from .measurable_base import MeasurableSpec, MeasurableBase, MeasurableDomain
 
@@ -101,4 +108,14 @@ class TxConcurrentChemoRT(TreatmentEnvelopeMV, MeasurableBase, Base):
         event_date_attr="condition_start_date",        
         value_concept_attr="condition_episode",  
         value_predicate_attr="concurrent_chemort"
+    )
+
+class ReferralToSpecialistWindowMeasurable(ConsultWindowMV, MeasurableBase, Base):
+    __measurable__ = MeasurableSpec(
+        domain=MeasurableDomain.tx,
+        label="Referral to Specialist Window",
+        person_id_attr="person_id",
+        episode_id_attr="episode_id",
+        event_date_attr="initial_gp_referral",        
+        value_numeric_attr="referral_to_specialist"
     )
