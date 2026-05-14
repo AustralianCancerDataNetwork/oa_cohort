@@ -1,222 +1,229 @@
 # Atomic Rule Types (`QueryRule`)
 
-`QueryRule` is the fundamental building block of all cohort and indicator logic.
+`QueryRule` is the smallest declarative unit in the engine.
 
-A rule represents a single declarative clinical condition applied to a specific measurable field. They they provide the minimal logical predicates from which subqueries and measures are constructed.
+Each rule:
 
-Each rule translates into a SQL `WHERE` clause fragment against a target field defined by a `Measurable`.
+* targets a field resolved by a `Subquery`
+* produces a SQL `WHERE` clause fragment
+* participates in rule-level `UNION ALL` composition inside the subquery
 
-At execution time:
+The sections below describe the supported matcher types in terms of current code behavior.
 
-* A `Subquery` selects the appropriate field from a measurable.
-* Each `QueryRule` generates a boolean filter expression.
-* Rule-level selects are combined via `UNION ALL`.
+---
 
-The sections below describe each supported rule type.
-
-----
-
-## 1. `ExactRule` — Exact Concept Match
+## 1. `ExactRule`
 
 ### Semantics
 
-Matches records whose concept field is exactly equal to a single OMOP concept.
+Match rows whose concept-like field equals a single OMOP concept id.
 
-### SQL Shape
+### SQL shape
 
 ```sql
 field = concept_id
 ```
 
-### Example — Palliative Care Referral
+### Typical use
 
-* Subquery: Palliative care referral
-* Target: obs_concept
-* Definition: `<ExactRule id=139 exact concept=4127745>`
+Precise coded events such as a single diagnosis, procedure, or referral concept.
 
-This matches the concept “Referral to palliative care service”.
-
-### Example — Lung Surgery
-
-* Subquery: Lung Surgery
-* Target: tx_surgical
-* Multiple ExactRules are combined within the subquery:
-    * Lobectomy
-    * Operation on lung
-    * Lung excision
-    * Total pneumonectomy
-
-Each rule contributes its own `SELECT`; the subquery performs a `UNION`, preserving all qualifying surgical events.
-
-## 2. HierarchyRule — Inclusive Hierarchical Expansion
+## 2. `HierarchyRule`
 
 ### Semantics
 
-Matches a concept and all of its descendants using the OMOP `concept_ancestor` table.
+Expand one OMOP concept into its descendants using `concept_ancestor`, then match any descendant concept.
 
-### SQL Shape
+### SQL shape
 
 ```sql
 field IN (descendant_concept_ids)
 ```
 
-### Example — Stage 4 Disease
+### Typical use
 
-* Subquery: Stage 4
-* Target: dx_stage
-* Definition: `<HierarchyRule id=45 hierarchy concept=1633987>`
+Broad diagnosis or procedure groupings such as stage families or disease branches.
 
-This expands Stage 4 to include all sub-classifications beneath the parent concept.
-
-
-## 3. HierarchyExclusionRule — Hierarchical Exclusion
+## 3. `HierarchyExclusionRule`
 
 ### Semantics
 
-Excludes a concept and all of its descendants. Used to express definitions such as “all X except Y”.
+Exclude a concept and all of its descendants.
 
-### SQL Shape
+### SQL shape
 
 ```sql
 field NOT IN (descendant_concept_ids)
 ```
 
-### Example — Non-Squamous Disease
+### Typical use
 
-* Subquery: Non-squamous disease
-* Target: dx_primary
-* Definition: `<HierarchyExclusionRule id=410 hierarchyexclusion concept=4300118>`
+Definitions like "all lung cancers except squamous cell carcinoma".
 
-This excludes squamous cell carcinoma and all its descendants.
-
-## 4. PresenceRule — Any Recorded Value
+## 4. `PresenceRule`
 
 ### Semantics
 
-Matches records where the target field is non-null. Used when the question is simply whether any value exists.
+Match rows where the resolved field is non-null.
 
-### SQL Shape
+### SQL shape
 
 ```sql
 field IS NOT NULL
 ```
 
-### Example — Any Systemic Therapy
+### Typical use
 
-* Subquery: Any Systemic Therapy
-* Target: tx_chemotherapy
-* Definition: `<PresenceRule id=114 presence>`
+Existence checks such as:
 
-This does not constrain the specific drug — it only requires that some chemotherapy record exists. The definition for what qualifies as systemic therapy is therefore dependent upon the definition within the specific `Measurable` mapper class used as the target. In this example it captures the existence of any drug exposure records that have an explicit link to a treatment episode.
+* any chemotherapy record
+* any death date
+* any observation in a target domain
 
-### Example — Death
-
-* Subquery: Death
-* Target: demog_death
-* Definition: <PresenceRule id=109 presence>
-
-Matches any non-null death date.
-
-## 5. AbsenceRule — Explicit Null
+## 5. `AbsenceRule`
 
 ### Semantics
 
-Matches records where the field is null. Used to express negative definitions.
+Match rows where the resolved field is null.
 
-### SQL Shape
+### SQL shape
 
 ```sql
 field IS NULL
 ```
-This supports constructs such as “no documented metastases” or “no recorded procedure”.
 
-## 6. ScalarRule — Numeric Threshold Comparison
+### Typical use
+
+Negative cohort definitions such as "no surgery" or "no documented metastases".
+
+## 6. `ScalarRule`
 
 ### Semantics
 
-Applies a numeric comparator to a measurable’s numeric value column.
+Apply a threshold comparison to a measurable's numeric value column.
 
-Supports operators: `>, <, ==, !=`
+Supported threshold directions:
 
-The rule optionally constrains comparison to a specific concept.
+* `>`
+* `<`
+* `=`
+* `!=`
 
-Scalar rules resolve their numeric value column indirectly via the `Measurable` registry, allowing the same rule abstraction to operate across domains.
+Scalar rules also carry a `threshold_comparator` target, which tells the engine which measurable exposes the numeric column to compare against.
 
-### SQL Shape
+### Concept filtering behavior
+
+Scalar rules have two modes:
+
+* `concept_id = 0`: threshold-only comparison, no concept restriction
+* `concept_id != 0`: threshold comparison constrained to a concept-like field
+
+This is an important current usage detail:
+
+* numeric-only measurables are valid for threshold-only scalar rules
+* concept-constrained scalar rules require the target measurable to expose both `value_numeric_attr` and `value_concept_attr`
+
+### SQL shape
+
+Threshold-only scalar rule:
+
+```sql
+numeric_value_column < threshold
+```
+
+Concept-constrained scalar rule:
 
 ```sql
 field = concept_id
 AND numeric_value_column < threshold
 ```
 
-### Example — Treatment Within 30 Days of Death
+### Typical use
 
-* Subquery: Treatment within 30 days of death
-* Target: tx_to_death_window
-* Definition: `<ScalarRule id=409 scalar lt 31 on=tx_to_death_window>`
+* treatment within 30 days of death
+* diagnosis to treatment interval
+* referral-to-specialist interval
+* measurement thresholds such as ECOG, lab values, or scores
 
-This applies a temporal window threshold at the `Measurable` level, but can be applied to result values or other numeric fields as well.
-
-## 7. PhenotypeRule — Curated Concept Group Expansion
+## 7. `PredicateRule`
 
 ### Semantics
 
-Expands a phenotype definition into a set of concept IDs.
+Match rows using a boolean predicate column exposed by the measurable.
 
-Unlike hierarchical expansion, phenotype sets are curated and may not correspond to OMOP hierarchy structure.
+Predicate rules use `concept_id` as a lightweight boolean flag rather than as an OMOP concept lookup:
 
-For very complex and deeply layered definitions, this will typically outperform many layers of combinatorial measures required to execute. This ends up being a tradeoff between a more maintainable measure definition relative to vocabulary updates, versus overly deep nesting that can struggle with large cohorts. 
+* `concept_id is None`: predicate must be `TRUE`
+* `concept_id = 1`: predicate must be `TRUE`
+* `concept_id = 0`: predicate must be `FALSE`
+* any other non-zero value is coerced to `TRUE`
 
-### SQL Shape
+### SQL shape
+
+```sql
+predicate_field IS TRUE
+```
+
+or
+
+```sql
+predicate_field IS FALSE
+```
+
+### Typical use
+
+Derived boolean modifiers such as:
+
+* treatment includes radiotherapy
+* treatment includes systemic therapy
+* concurrent chemo-radiotherapy flag
+
+## 8. `PhenotypeRule`
+
+### Semantics
+
+Expand a phenotype definition into a curated set of concepts and match any of them.
+
+### SQL shape
 
 ```sql
 field IN (phenotype_concept_ids)
 ```
 
-### Example - Non-Small Cell Lung Cancer Phenotype
+### Typical use
 
-* Subquery: Non small cell lung cancer phenotype
-* Target: dx_primary
-* Definition: `<PhenotypeRule id=1607 phenotype phenotype=nsclc>`
+Curated research or histology-driven definitions that do not map cleanly onto a single hierarchy.
 
-Here, the rule does not reference a single concept. Instead, it expands the nsclc phenotype definition into a curated set of concept IDs representing non-small cell lung cancer across coding systems and subtypes.
-
-This is particularly useful where histology-driven definitions often do not align cleanly with a single vocabulary branch.
-
-## 8. SubstringRule — Concept Code Substring Match
+## 9. `SubstringRule`
 
 ### Semantics
 
-Matches concept codes using substring logic.
+Match rows whose resolved string field contains the source concept's `concept_code`.
 
-Used primarily when hierarchical relationships are insufficient or when legacy coding systems rely on structured prefixes.
+In practice this is usually used against measurable string fields that store code- or label-like values.
 
-### SQL Shape
+### SQL shape
 
 ```sql
-field ILIKE '%substring%'
+field ILIKE '%concept_code%'
 ```
 
-This is typically a fallback strategy rather than preferred design.
+### Typical use
 
-### Example - Mesothelioma
+Fallback matching for legacy coding systems or structured code prefixes where OMOP hierarchy expansion is insufficient.
 
-* Subquery: Mesothelioma
-* Target: dx_primary
-* Definition: `[<SubstringRule id=151 substring concept=44499065>, <SubstringRule id=152 substring concept=44499069>, <SubstringRule id=153 substring concept=44499067>, <SubstringRule id=154 substring concept=44499070>]`
+---
 
-Each rule generates its own `SELECT`. The subquery combines them using UNION ALL, preserving all qualifying diagnosis events.
+## Summary
 
-
-## Summary Rule Type Comparison
-
-| Rule Type                  | Backed By                              | Best Used For                                      | Typical Oncology Use Case                          |
-|----------------------------|------------------------------------------|---------------------------------------------------|---------------------------------------------------|
-| `ExactRule`                | Single OMOP concept ID                  | Precisely coded clinical events                   | Lobectomy; Referral to palliative care            |
-| `HierarchyRule`            | OMOP `concept_ancestor` expansion       | Broad disease or procedure groupings              | Stage 4 disease; Bronchus cancer                  |
-| `HierarchyExclusionRule`   | OMOP `concept_ancestor` expansion       | “All except X” definitions                        | Non-squamous lung cancer                          |
-| `PresenceRule`             | Field non-null check                    | Existence of any event in domain                  | Any systemic therapy; Death recorded              |
-| `AbsenceRule`              | Field null check                        | Negative definitions                              | No surgery; No documented metastases              |
-| `ScalarRule`               | Numeric value column from `Measurable`  | Threshold or temporal comparisons                 | Treatment < 30 days from death; ECOG ≥ 2          |
-| `PhenotypeRule`            | Curated concept set                     | Composite or research-defined groupings           | NSCLC phenotype                                   |
-| `SubstringRule`            | Concept code pattern match              | Legacy or prefix-based grouping                   | Mesothelioma code block grouping                  |
+| Rule type | Primary measurable field | Typical purpose |
+|---|---|---|
+| `ExactRule` | concept | precise coded match |
+| `HierarchyRule` | concept | inclusive concept family |
+| `HierarchyExclusionRule` | concept | exclusion family |
+| `PresenceRule` | concept-like field | any recorded value |
+| `AbsenceRule` | concept-like field | explicit absence |
+| `ScalarRule` | numeric, optionally concept | thresholds and time windows |
+| `PredicateRule` | predicate | derived booleans |
+| `PhenotypeRule` | concept | curated concept-set expansion |
+| `SubstringRule` | string | code/label substring match |

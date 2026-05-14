@@ -79,7 +79,16 @@ class Subquery(HTMLRenderable, Base):
 
     def filter_field(self, measurable: type[MeasurableBase]) -> SQLCol:
         """
-        Choose concept vs numeric value column depending on rule types.
+        Resolve the measurable field that individual rules should inspect.
+
+        Most rule types filter against a concept-, string-, or predicate-like
+        column. Scalar rules are slightly different: they always read their
+        threshold value from the measurable's numeric column, and only require
+        a concept column when at least one scalar rule has ``concept_id != 0``.
+
+        For scalar-only subqueries whose rules all use ``concept_id = 0``, the
+        returned field is the numeric column itself because the concept clause
+        is short-circuited to ``TRUE`` by :class:`ScalarRule`.
         """
         use_numeric = any(r.requires_numeric for r in self.rules)
         use_string = any(r.requires_string for r in self.rules) 

@@ -355,6 +355,9 @@ class ScalarRule(QueryRule):
     Scalar rules apply threshold logic (>, <, =, !=) to numeric-valued fields,
     typically measurements or derived numeric modifiers. The rule can optionally
     constrain the comparison to a specific concept (e.g. a particular lab test).
+    A ``concept_id`` of ``0`` is treated as "no concept restriction", allowing
+    threshold-only comparisons against measurables that expose a numeric value
+    column but no concept-matching column.
 
     Clinically, this supports definitions such as:
     - "ECOG performance status ≥ 2"
@@ -368,6 +371,7 @@ class ScalarRule(QueryRule):
 
     @property
     def comparator(self) -> tuple[int, int]:
+        """Return the numeric threshold plus the optional concept discriminator."""
         if self.scalar_threshold is None:
             raise RuntimeError(f'Scalar threshold is not set on rule {self.query_rule_id}')
         if not self.concept and not self.concept_id == 0:
@@ -454,8 +458,13 @@ class PredicateRule(QueryRule):
         Whether the predicate must evaluate to TRUE or FALSE.
 
         Default behaviour:
+            concept_id is None: predicate must be TRUE
             concept_id = 1: predicate must be TRUE
             concept_id = 0: predicate must be FALSE
+
+        Any non-zero concept id is coerced to ``True`` because predicate rules
+        use ``concept_id`` as a lightweight boolean flag rather than as a real
+        OMOP concept reference.
         """
         if self.concept_id is None:
             return True
