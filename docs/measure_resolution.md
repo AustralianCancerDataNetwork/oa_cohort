@@ -1,10 +1,10 @@
-# Measure Resolution 
+# Measure Resolution
 
-## MeasureMember - atomic unit of result
+## `MeasureMember`: the atomic result row
 
-When a measure is executed, it produces a sequence of:
+When a measure executes, it materialises `MeasureMember` rows:
 
-```Python
+```python
 @dataclass(frozen=True)
 class MeasureMember:
     person_id: int
@@ -13,71 +13,65 @@ class MeasureMember:
     measure_date: Optional[date]
 ```
 
-A `MeasureMember` represents a specific person qualifying for a measure at a specific time, for a specific resolver.
+A `MeasureMember` is not just a boolean membership flag. It captures:
 
-It is not only the fact of membership, because it includes resolution to a time-stamped qualification event. 
-This distinction is critical for reporting, which requires flexible time-windowing periods to produce trends and per-period analysis.
+* who qualified
+* under which resolver
+* on what date
 
-## Measure Combination Semantics
+This preserved timing is what allows indicator windows, per-period reporting, and episode-aware logic to work later in the pipeline.
 
-Measures use `RuleCombination` to compose child measures via `OR` or `AND`, and the handling of these semantics is significantly different when composing from lower levels.
+## Canonical Combination Semantics
 
-![Qualification temporal resolution](img/temporal_resolver_1.png)
+Measures compose child results using the canonical member shape. In the shipped config this is primarily through `OR` and `AND`.
 
-### OR Logic: Union of qualifying events
+### `OR`: preserve all qualifying rows
+
+`OR` logic unions child outputs without collapsing them.
+
+Implementation shape:
+
+* each child emits canonical rows
+* rows are combined with `UNION ALL`
+* all qualifying dates are preserved
+
+Example:
+
+* measure = ECOG 0 OR ECOG 1
+
+If the same person qualifies on two different dates, both rows survive.
 
 ![Qualification temporal resolution](img/temporal_resolver_2.png)
 
-`OR` logic preserves all qualifying rows.
+### `AND`: resolver-aligned intersection
 
-Implementation:
+`AND` is not a simple person-level intersection. The same `measure_resolver` must satisfy all child criteria.
 
-* Each child measure emits rows
-* Rows are combined using `UNION ALL`
-* Multiple qualification dates are preserved.
-* No resolver alignment is required.
-* Events bubble upward unchanged.
+Implementation shape:
+
+* child rows are aligned by `measure_resolver`
+* the resulting qualification date is the latest child date
+* rows with mismatched resolvers do not qualify together
+
+This represents the earliest point at which all required conditions have become true for the same clinical context.
 
 Example:
 
-* Measure = ECOG 0 OR ECOG 1
+* measure = Stage III AND Radiotherapy
 
-If a person has:
+If Stage III qualifies under episode 10 and Radiotherapy qualifies under episode 10, the composite measure qualifies.
 
-* ECOG 0 on Jan 1
-* ECOG 1 on Mar 1
-
-Result: Two `MeasureMember` rows, with both dates preserved
-
-### AND Logic: Resolver-Aligned Intersection
+If the two child rows belong to different episodes, they do not intersect.
 
 ![Qualification temporal resolution](img/temporal_resolver_3.png)
 
-`AND` logic is not simply “person appears in both”. It requires that the same resolver must satisfy all child criteria.
+### `FIRST` vs `ANY`
 
-Implementation:
+The engine compiles multiple SQL variants for measures and subqueries:
 
-* Each child measure emits canonical rows.
-* Children are joined on measure_resolver.
-* Resolver alignment is required.
-* Qualification date shifts forward to the last satisfied condition.
-* If resolvers differ, the row is excluded.
-* Qualification date becomes: `greatest(child_1_date, child_2_date, ...)`
-
-This represents the earliest moment at which all criteria are true.
-
-Example:
-
-* Measure = Stage III AND Radiotherapy
-
-If a person has:
-
-* Stage III on Jan 1 (episode 10)
-* Radiotherapy on Feb 15 (episode 10)
-
-Result: One row, qualification date = Feb 15
-
-If RT occurred under episode 20 instead, there is no result (resolvers do not align)
+* `ANY`: preserve all qualifying rows
+* `FIRST`: collapse to the earliest qualifying row per resolver
+* `UNDATED`: keep qualifying membership without dates for intermediate set logic
 
 ### Temporal Window: Event-to-Event Timing
 
@@ -152,15 +146,17 @@ MeasureTemporalWindow:
 
 Measures can be nested arbitrarily:
 
-```
+```text
 A AND (B OR C)
 ```
 
 Evaluation proceeds bottom-up:
 
-1. B OR C → union of events
-2. A → events
-3. AND joins A with (B OR C) on resolver
-4. Qualification date = greatest of aligned dates
+1. `B OR C` resolves to all qualifying child rows
+2. `A` resolves independently
+3. `AND` aligns rows on `measure_resolver`
+4. the composite qualification date becomes the latest aligned child date
 
-The canonical shape is preserved at every level.
+The canonical member shape is preserved at every level, which is why deeply nested logic can still feed report generation consistently.
+
+![Qualification temporal resolution](img/temporal_resolver_1.png)

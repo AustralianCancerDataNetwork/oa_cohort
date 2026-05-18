@@ -1,24 +1,24 @@
 import html
-from typing import Iterable, Protocol, Union
+from typing import Iterable, Protocol, Union, Any, Mapping
 from pathlib import Path
-from IPython.display import HTML, display
+from IPython.display import HTML, display # type: ignore
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from .executability import ExecStatus
 
-def esc(x) -> str:
+def esc(x: Any) -> str:
     return "" if x is None else html.escape(str(x))
 
 def tag(name: str, body: str, *, cls: str | None = None) -> str:
     c = f' class="{cls}"' if cls else ""
     return f"<{name}{c}>{body}</{name}>"
 
-def td(x, *, cls: str | None = None) -> str:
+def td(x: Any, *, cls: str | None = None) -> str:
     if isinstance(x, RawHTML):
         return tag("td", x.html, cls=cls)
     return tag("td", esc(x), cls=cls)
 
-def th(x) -> str:
+def th(x: Any) -> str:
     return tag("th", esc(x))
 
 def tr(cells: Iterable[str]) -> str:
@@ -62,23 +62,23 @@ class HTMLRenderable:
     Optionally override:
       - _html_css_class()  -> e.g. "measure", "subquery", "queryrule"
     """
-    _CSS_LOADED = False
+    _css_loaded = False
 
     @classmethod
     def _ensure_css(cls):
-        if cls._CSS_LOADED:
+        if cls._css_loaded:
             return
 
         css_path = Path(__file__).parent / "render.css"
         css = css_path.read_text()
         style_tag = f"<style>{css}</style>"
         display(HTML(style_tag))
-        cls._CSS_LOADED = True
+        cls._css_loaded = True
 
     def _html_title(self) -> str:
         return self.__class__.__name__
 
-    def _html_header(self) -> dict[str, object]:
+    def _html_header(self) -> Mapping[str, object]:
         """
         Key-value summary for the object.
         Values may be str or RawHTML.

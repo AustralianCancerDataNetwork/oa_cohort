@@ -1,162 +1,144 @@
 # Reporting and Measure Execution Model
 
-The `oa-cohorts` library defines the core domain model for constructing, executing, and evaluating clinical quality reports.
+`oa-cohorts` defines the core domain model for building reusable cohort logic, compiling it to SQL, and materialising time-stamped qualification events for downstream reporting.
 
-It compiles configurable logical criteria into SQL, executes them, and materialises qualification events that are propagated upward into indicators and reports.
+Every executable unit ultimately resolves to a set of [`MeasureMember`](measure_resolution.md) rows:
 
-Every logical construct resolves to a set of time-stamped qualification events, represented by the [`MeasureMember`](measure_resolution.md) object.
+```text
+{person_id, episode_id, measure_resolver, measure_date}
+```
 
------------------
+That canonical shape lets reports, indicators, and dashboards reuse the same underlying logic while preserving timing and episode alignment.
+
+---
 
 ## Conceptual Layers
 
-### Layer 6: Reporting
+### Layer 6: Report
 
-A `Report` is the top-level orchestration unit combining cohorts and indicators - responsible for coordinated measure execution. 
-It is defined as a combination of cohorts (_what logical unit of patients are in-scope for this specific set of reporting analyses?_) and 
-indicators (_whether a defined subset of patients met specific clinical criteria within a defined population and time context._)
+A `Report` orchestrates cohort and indicator execution for a specific reporting context.
 
-The object handles aggregation of cohorts and indicators, as well as coordinating measure execution.
+Reports:
 
-Because cohorts, indicators and measures are all reusable in multiple report settings, it is simpler for them to operate entirely independently of 
-the report object, and therefore the `Report` also handles the special case `measure_id = 0`, which simply surfaces all members of the full cohort.
+* group together one or more dashboard cohorts
+* execute cohort and indicator measures in a coordinated way
+* treat `measure_id = 0` as the special "full report cohort" denominator
+* assemble final output rows with preserved numerator and denominator dates
 
-Reports do not generate SQL directly. They orchestrate execution and consume `MeasureMember` results.
+Reports do not compile measure SQL themselves. They consume `MeasureMember` results produced lower in the stack.
 
 ![Example overall usage](img/example_usage.png)
 
-The figure illustrates the intended operational model of the reporting engine. Measures resolve into person-level, time-stamped qualification events that are materialised as columns in an underlying report dataset. Indicators and dashboard visualisations are derived directly from these measure definitions, while report-level date filters operate on qualification dates to dynamically include or exclude individuals. This dataset can then be surfaced via external visualisation tools (e.g., Power BI) or exposed through an API to power a RESTful dashboard application.
-
-### Layer 5: Dash Cohort 
+### Layer 5: Dash Cohort
 
 ![Report to dash cohort relationship](img/report_to_dash_cohort.png)
 
-A `DashCohort`idefines a clinically meaningful population by grouping one or more cohort definitions, each of which wraps a single measure.
+A `DashCohort` defines a clinically meaningful population by grouping one or more cohort definitions, each of which wraps a single measure.
 
-A cohort’s members are the union of its underlying definitions. 
-In downstream reporting systems, those definitions can be surfaced as sub-cohorts for filtering, stratification, or drill-down analysis, but their core purpose is to provide a stable population boundary around which reporting logic operates.
+A cohort's members are the union of its underlying definitions. In downstream reporting systems those definitions can be surfaced as sub-cohorts for filtering or drill-down, but their primary role is to create a stable population boundary for indicator logic.
 
 ![Report to dash cohort relationship example](img/report_to_dash_cohort_example.png)
 
-For example, a Lung Cancer MDT report may draw from separate primary lung and metastatic lung cohorts. A surgical quality report may distinguish between inpatient and day surgery populations while evaluating the same underlying operative measures. In both cases, the clinical criteria remain constant; what changes is the reporting context.
+### Layer 4: Indicator
 
-### Layer 4: Indicators
+Indicators compose measures into:
 
-Composes measures into denominators (_for whom is this indicator relevant?_) and numerators (_out of those individuals for whom the indicator is relevant, who met the criteria?_).
-
-This structure mirrors the way clinical quality is reported in practice: first identify the relevant patients, then evaluate performance within that group.
+* denominator: who is in scope
+* numerator: which in-scope members met the target condition
 
 ![Report to indicator relationship](img/report_to_indicator.png)
 
-At execution time, both numerator and denominator measures must be executable. Each resolves independently into a set of `MeasureMember` objects, preserving episode alignment and qualification dates. For report output, indicator rows are emitted per denominator member within the report cohort, with numerator qualification evaluated against that denominator row.
+Both numerator and denominator resolve independently to `MeasureMember` rows. Final report payloads keep both dates:
 
-Numerator and denominator each retain their own qualification dates. Report payloads preserve `denominator_date` from the denominator event and `numerator_date` from the matched numerator event for the same person and resolver. When the denominator is the full report cohort (`measure_id = 0`), final payload assembly still evaluates numerator truth per cohort membership row, using that row's cohort membership date as the anchor. This allows different in-scope episodes for the same person to qualify differently when indicator-level windows are configured.
+* `denominator_date`
+* `numerator_date`
 
-Indicators often depend on temporal relationships between events.
-
-For example:
-
-* Treatment within 30 days of death
-* Smoking status documented within 30 days of cohort entry
-* Post-operative mortality within 90 days
-
-In these cases, numerator and denominator measures may each resolve at different dates. The reporting layer applies temporal comparators between these preserved qualification dates.
-
-Indicators can also define dynamic relative date windows on either side:
-
-* numerator window: `numerator_max_days_prior` / `numerator_max_days_post`
-* denominator window: `denominator_max_days_prior` / `denominator_max_days_post`
-
-These windows are not attached to the reusable `Measure`. Instead, they are applied during indicator row assembly relative to the report cohort membership date. This keeps the measure definition broad and reusable while allowing the same measure to support different timing rules in different indicators.
+Indicator-level relative date windows are applied during payload assembly, not embedded in reusable measure definitions. This keeps measures broad and reusable while allowing different reports to impose different timing rules.
 
 ![Report to indicator relationship example](img/report_to_indicator_example.png)
 
-This design ensures that:
-
-* Clinical logic remains modular
-* Time windowing remains configurable at the indicator/report-output level
-* Indicators can be reused in different reporting contexts
-* `measure_id = 0` can represent the full report cohort as a denominator during payload assembly
-
 ### Layer 3: Measure
 
-Recursive tree of subqueries and/or child measures. 
+A `Measure` is a recursive logical node that compiles to SQL and produces `MeasureMember` rows.
 
-Compiles to arbitrary-depth boolean query logic, which when executed produces a set of `MeasureMember` rows.
+Measures can be:
 
-![Measure definition](img/measure_definition.png)
-
-A `Measure` can be:
+* leaf measures backed by a single subquery
+* composite measures backed by child measures
 
 * Leaf: wraps a single subquery
 * Composite: combination of child measures via OR / AND / EXCEPT
 * Temporal window: event B relative to event A, with configurable bounds and pick strategy (see [`MeasureTemporalWindow`](measure_resolution.md#temporal-window-event-to-event-timing))
 
-Measures do not execute SQL directly — they compile into SQL via `MeasureSQLCompiler`, and execution is handled by `MeasureExecutor`.
+Measures are compiled by `MeasureSQLCompiler` and executed by `MeasureExecutor`.
 
+![Measure definition](img/measure_definition.png)
 
 ### Layer 2: Subquery
 
 A `Subquery` is the atomic SQL-producing unit.
 
-* Combines rule-level selects with `UNION ALL`
-* Driven by one or more `QueryRule` objects. 
-* Acts on a specific `RuleTarget` (e.g., diagnosis, treatment, observation).
-* For each rule, emits a row that will return results of the canonical `MeasureMember` shape 
+It defines:
 
-```
-{person_id: i, episode_id: e, measure_resolver: x, measure_date: yyyy-mm-dd}
-```
+* a `RuleTarget`
+* a `RuleTemporality`
+* one or more `QueryRule` objects
 
-All subqueries must return these four columns:
+Subqueries are responsible for:
 
-| Column            | Meaning                                                 |
-|-------------------|---------------------------------------------------------|
-| `person_id`       | Individual identifier                                   |
-| `episode_id`      | Clinical episode (if applicable)                        |
-| `measure_resolver`| Logical grouping key (often episode or event id)        |
-| `measure_date`    | Date at which the criterion was satisfied               |
+* resolving the measurable class for their target
+* choosing the field that each rule should inspect
+* generating `ANY`, `FIRST`, and `UNDATED` SQL variants
 
-This shape is enforced so that higher-level logic can safely combine results.
+All subqueries emit the canonical measure-member columns:
 
-!!! note "Rule Combinations Inside Subqueries"
+| Column | Meaning |
+|---|---|
+| `person_id` | individual identifier |
+| `episode_id` | clinical episode |
+| `measure_resolver` | logical alignment key, usually the episode id |
+| `measure_date` | date on which the criterion was satisfied |
 
-    If multiple rules exist within a subquery:
+Rule handling inside a subquery:
 
-    - Each rule produces its own `SELECT`
-    - These are combined with `UNION ALL`
+* each rule contributes its own `WHERE` clause fragment
+* rule-level selects are combined with `UNION ALL`
+* `FIRST` collapses those candidate rows to the earliest qualifying date per resolver
 
-    This preserves all qualifying events.
+Value-column resolution depends on the rule types present:
 
-    Subqueries do not combine with other subqueries — that is the role of `Measure`.
+* exact, hierarchy, presence, and absence rules use a concept-like field
+* substring rules use the measurable's string field
+* predicate rules use the measurable's predicate field
+* scalar rules always use the measurable's numeric field for threshold comparison
+* scalar rules only require a concept field when at least one scalar rule has `concept_id != 0`
 
-
+That last point is important for derived window measurables such as `tx_to_death_window` and `referral_to_specialist_window`: threshold-only scalar rules can run against numeric-only measurables.
 
 ### Layer 1: QueryRule
 
-A `QueryRule` represents an atomic predicate on a measurable field.
+A `QueryRule` is the smallest declarative unit in the engine: a single predicate applied to a field resolved by a subquery.
 
 Examples:
 
-* Diagnosis concept equals X
-* Numeric value greater than Y
-* String value matches pattern Z
+* diagnosis concept equals X
+* numeric value is less than Y
+* predicate column is true
+* concept code contains substring Z
 
-A rule does not produce SQL on its own — it contributes a `WHERE` clause within a Subquery.
+A rule does not generate a standalone query. It only contributes a `WHERE` clause fragment within a subquery.
 
+---
 
-## Feeding results to higher-level reporting systems and visualisers
+## Why MeasureMember Rows Matter
 
-The system is designed so that:
+The engine preserves qualification rows instead of reducing everything to a single boolean membership flag.
 
-* Every logical construct preserves qualification dates.
-* AND logic synthesises correct qualification moments.
-* OR logic preserves all candidate dates.
-* Resolver alignment prevents false intersections.
+That supports:
 
-At the reporting layer, this enables:
+* trend analysis over time
+* indicator windows anchored to cohort membership dates
+* episode-aware joins for `AND` logic
+* multiple qualifying events per person when `OR` logic applies
 
-* Filtering members by qualification date
-* Computing time windows
-* Evaluating temporal indicators
-* Comparing numerator vs denominator timing
+This is the core design choice that makes the reporting layer flexible without forcing each report to redefine its own SQL.

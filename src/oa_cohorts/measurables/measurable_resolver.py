@@ -1,5 +1,5 @@
-from typing import Type, TYPE_CHECKING
-from ..core import RuleTarget, RuleTemporality
+from typing import Type
+from ..core import RuleTarget
 from .measurable_base import MeasurableBase
 
 def get_measurable_registry() -> dict[RuleTarget, Type[MeasurableBase]]:
@@ -18,7 +18,8 @@ def get_measurable_registry() -> dict[RuleTarget, Type[MeasurableBase]]:
         IntentRTMeasurable,
         TxDaysBeforeDeath,
         TxDaysToStartTreatment,
-        TxConcurrentChemoRT
+        TxConcurrentChemoRT,
+        ReferralToSpecialistWindowMeasurable
     )
 
     from .ev_measureables import (
@@ -48,5 +49,6 @@ def get_measurable_registry() -> dict[RuleTarget, Type[MeasurableBase]]:
         RuleTarget.demog_death: DeathMeasurable,
         RuleTarget.tx_to_death_window: TxDaysBeforeDeath,
         RuleTarget.dx_to_tx_window: TxDaysToStartTreatment,
-        RuleTarget.tx_concurrent: TxConcurrentChemoRT
+        RuleTarget.tx_concurrent: TxConcurrentChemoRT,
+        RuleTarget.referral_to_specialist_window: ReferralToSpecialistWindowMeasurable
     }

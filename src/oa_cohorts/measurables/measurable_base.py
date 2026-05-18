@@ -1,13 +1,13 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import ClassVar, Optional, Mapping
+from typing import ClassVar, Optional, Mapping, Any, TypeAlias
 import sqlalchemy as sa
 import enum
 from typing import TypeAlias
 from sqlalchemy.sql import ColumnElement
 from ..core import RuleTarget, RuleTemporality
 
-SQLCol: TypeAlias = sa.Column | ColumnElement
+SQLCol: TypeAlias = sa.Column[Any] | ColumnElement[Any]
 
 class MeasurableDomain(str, enum.Enum):
     dx = "dx"
@@ -19,6 +19,13 @@ class MeasurableDomain(str, enum.Enum):
 
 @dataclass(frozen=True)
 class MeasurableSpec:
+    """
+    Declarative mapping from a measurable ORM class to the query engine contract.
+
+    Attribute names are stored as strings and resolved against the concrete class
+    during binding. Optional value attributes remain unset when the measurable
+    does not support that filter style.
+    """
     domain: MeasurableDomain
     label: str
 
@@ -34,7 +41,15 @@ class MeasurableSpec:
     temporality_map: Mapping[RuleTemporality, str] | None = None
     valid_targets: set[RuleTarget] | None = None
 
-    def bind(self, cls) -> "BoundMeasurableSpec":
+    def bind(self, cls: type[Any]) -> "BoundMeasurableSpec":
+        """
+        Resolve declared attribute names against a concrete measurable class.
+
+        Unsupported value channels are left as ``None`` rather than replaced
+        with synthetic SQL expressions. Downstream query logic must therefore
+        explicitly check whether a measurable supports concept, numeric, string,
+        or predicate filtering before building the corresponding rule.
+        """
         return BoundMeasurableSpec(
             domain=self.domain,
             label=self.label,
@@ -54,30 +69,34 @@ class MeasurableSpec:
 
 @dataclass(frozen=True)
 class BoundMeasurableSpec:
+    """Concrete SQLAlchemy column bindings derived from a :class:`MeasurableSpec`."""
     domain: MeasurableDomain
     label: str
 
-    episode_id_col: sa.Column
-    person_id_col: sa.Column
-    event_date_col: sa.Column
+    episode_id_col: SQLCol
+    person_id_col: SQLCol
+    event_date_col: SQLCol
 
-    value_numeric_col: Optional[sa.Column] = None
-    value_concept_col: Optional[sa.Column] = None
-    value_string_col: Optional[sa.Column] = None 
-    value_predicate_col: Optional[sa.Column] = None 
+    value_numeric_col: SQLCol | None = None
+    value_concept_col: SQLCol | None = None
+    value_string_col: SQLCol | None = None
+    value_predicate_col: SQLCol | None = None
 
-    temporality_map: Mapping[RuleTemporality, sa.Column] | None = None
+    temporality_map: Mapping[RuleTemporality, SQLCol] | None = None
     valid_targets: set[RuleTarget] | None = None
 
 class MeasurableBase:
     """
     Base class for any MV/ORM entity that participates in measure logic.
+
+    Subclasses provide a ``__measurable__`` spec describing which columns map
+    onto the engine's canonical person / episode / date / value contract.
     """
 
     __measurable__: ClassVar[MeasurableSpec]
     __bound_measurable__: ClassVar[BoundMeasurableSpec]
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
 
         spec = getattr(cls, "__measurable__", None)
@@ -85,11 +104,11 @@ class MeasurableBase:
             cls.__bound_measurable__ = spec.bind(cls)
 
     @classmethod
-    def episode_id_col(cls):
+    def episode_id_col(cls) -> SQLCol:
         return cls.__bound_measurable__.episode_id_col
 
     @classmethod
-    def person_id_col(cls):
+    def person_id_col(cls) -> SQLCol:
         return cls.__bound_measurable__.person_id_col
 
     @classmethod

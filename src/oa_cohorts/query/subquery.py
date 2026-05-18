@@ -5,18 +5,29 @@ from orm_loader.helpers import Base
 from .query_rule import QueryRule
 from ..core import RuleTarget, RuleTemporality
 from ..measurables import get_measurable_registry, MeasurableBase
-from ..core.html_utils import HTMLRenderable, RawHTML, table, td, esc
+from ..measurables.measurable_base import SQLCol
+from ..core.html_utils import HTMLRenderable, RawHTML, esc, HTMLChild
 
 from sqlalchemy.sql import Select, CompoundSelect
-from typing import TypeAlias
+from typing import TypeAlias, Any, Iterable
 
-SQLQuery: TypeAlias = Select | CompoundSelect
+SQLQuery: TypeAlias = Select[Any] | CompoundSelect[Any]
 
 subquery_rule_map = sa.Table(
     "subquery_rule_map",
     Base.metadata,
-    sa.Column("subquery_id", sa.ForeignKey("subquery.subquery_id")),
-    sa.Column("query_rule_id", sa.ForeignKey("query_rule.query_rule_id")),
+    sa.Column(
+        "subquery_id",
+        sa.Integer,
+        sa.ForeignKey("subquery.subquery_id"),
+        primary_key=True,
+    ),
+    sa.Column(
+        "query_rule_id",
+        sa.Integer,
+        sa.ForeignKey("query_rule.query_rule_id"),
+        primary_key=True,
+    ),
 )
 
 class Subquery(HTMLRenderable, Base):
@@ -66,19 +77,42 @@ class Subquery(HTMLRenderable, Base):
         except KeyError:
             raise KeyError(f"No measurable registered for target {self.target}")
 
-    def filter_field(self, measurable: type[MeasurableBase]) -> sa.ColumnElement[bool]:
+    def filter_field(self, measurable: type[MeasurableBase]) -> SQLCol:
         """
-        Choose concept vs numeric value column depending on rule types.
+        Resolve the measurable field that individual rules should inspect.
+
+        Most rule types filter against a concept-, string-, or predicate-like
+        column. Scalar rules are slightly different: they always read their
+        threshold value from the measurable's numeric column, and only require
+        a concept column when at least one scalar rule has ``concept_id != 0``.
+
+        For scalar-only subqueries whose rules all use ``concept_id = 0``, the
+        returned field is the numeric column itself because the concept clause
+        is short-circuited to ``TRUE`` by :class:`ScalarRule`.
         """
         use_numeric = any(r.requires_numeric for r in self.rules)
         use_string = any(r.requires_string for r in self.rules) 
         use_predicate = any(r.requires_predicate for r in self.rules)
+        scalar_rules = [r for r in self.rules if r.requires_numeric]
+        scalar_needs_concept = any(r.concept_id != 0 for r in scalar_rules)
+        scalar_only = bool(scalar_rules) and len(scalar_rules) == len(self.rules)
         specs = measurable.__bound_measurable__
 
         col = specs.value_concept_col
         if use_numeric:
             val_col = specs.value_numeric_col
-            kind = "numeric"
+            if val_col is None:
+                raise ValueError(
+                    f"{measurable.__name__} does not expose a numeric value column "
+                    f"for scalar filtering in subquery {self.subquery_id}"
+                )
+
+            # Threshold-only scalar subqueries do not use the concept field:
+            # ScalarRule short-circuits the concept clause to TRUE when concept_id == 0.
+            if scalar_only and not scalar_needs_concept:
+                return val_col
+
+            kind = "concept"
         elif use_string:
             # special case - string based filters are looking for CONCEPT CODE filters, not 
             # actually string values in the sense of 'value_as_string' fields...
@@ -96,6 +130,12 @@ class Subquery(HTMLRenderable, Base):
             kind = "concept"
 
         if val_col is None or col is None:
+            if use_numeric and col is None and scalar_needs_concept:
+                raise ValueError(
+                    f"{measurable.__name__} does not expose a concept value column "
+                    f"for subquery {self.subquery_id}; scalar concept filtering "
+                    f"requires value_concept_attr when concept_id != 0"
+                )
             raise ValueError(
                 f"{measurable.__name__} does not expose required {kind} value column "
                 f"for subquery {self.subquery_id}"
@@ -116,15 +156,15 @@ class Subquery(HTMLRenderable, Base):
         ]
         return sa.and_(*clauses)
 
-    def filter_table(self, *, ep_override: bool = False) -> tuple[sa.ColumnElement, ...]:
+    def filter_table(self, *, ep_override: bool = False) -> tuple[sa.ColumnElement[Any], ...]:
         measurable = self.measurable_cls()
         return measurable.filter_table(ep_override=ep_override)
 
-    def filter_table_dated(self, *, ep_override: bool = False) -> tuple[sa.ColumnElement, ...]:
+    def filter_table_dated(self, *, ep_override: bool = False) -> tuple[sa.ColumnElement[Any], ...]:
         measurable = self.measurable_cls()
         return measurable.filter_table_dated(self.temporality, ep_override=ep_override)
 
-    def select(self, *, ep_override: bool = False) -> sa.Select:
+    def select(self, *, ep_override: bool = False) -> sa.Select[Any]:
         return (
             sa.select(*self.base_selectables(ep_override=ep_override))
             .where(self.where_clause())
@@ -150,7 +190,7 @@ class Subquery(HTMLRenderable, Base):
         measurable = self.measurable_cls()
         field = self.filter_field(measurable)
 
-        selects: list[sa.Select] = [
+        selects: list[sa.Select[Any]] = [
             sa.select(*self.filter_table_dated(ep_override=ep_override)).where(
                 rule.get_filter_details(field)
             )
@@ -170,7 +210,7 @@ class Subquery(HTMLRenderable, Base):
         measurable = self.measurable_cls()
         field = self.filter_field(measurable)
 
-        selects: list[sa.Select] = [
+        selects: list[sa.Select[Any]] = [
             sa.select(*self.filter_table(ep_override=ep_override)).where(
                 rule.get_filter_details(field)
             )
@@ -225,8 +265,8 @@ class Subquery(HTMLRenderable, Base):
             "Rule count": str(len(self.rules)),
         }
 
-    def _html_inner(self):
-        blocks: list[object] = []
+    def _html_inner(self) -> Iterable[HTMLChild]:
+        blocks: list[HTMLChild] = []
 
         # --- Rules ---
         blocks.append(RawHTML("<div class='subquery-section-title'>Rules</div>"))
