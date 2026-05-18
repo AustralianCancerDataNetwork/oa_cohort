@@ -73,16 +73,76 @@ The engine compiles multiple SQL variants for measures and subqueries:
 * `FIRST`: collapse to the earliest qualifying row per resolver
 * `UNDATED`: keep qualifying membership without dates for intermediate set logic
 
-For composite measures:
+### Temporal Window: Event-to-Event Timing
 
-* `OR` uses `ANY`-style union semantics
-* `AND` resolves through the `FIRST` path so that aligned child dates can be collapsed correctly
+A third measure kind handles cases where qualification depends on the relationship between two events — specifically, whether event B occurs within a defined window relative to event A.
 
-### `EXCEPT`
+This is expressed via `MeasureTemporalWindow`, a separate config table with a 1:1 relationship to `Measure` (enforced by primary key). A measure with a `window_config` row is a temporal window measure.
 
-`RuleCombination.rule_except` exists in the enum and SQL combiner map, but it is not used by the shipped dashboard configuration and is not covered in depth by the current user-facing docs.
+**Anchor and candidate**
 
-## Nested Measures
+The measure's own `subquery_id` defines the anchor event. A separate `candidate_measure_id` points to another measure whose events are evaluated relative to that anchor. The anchor is deduplicated to one row per resolver (earliest event) before the join.
+
+**Window bounds**
+
+`window_min_days` and `window_max_days` are optional. `NULL` means unbounded on that side. Negative values are valid — a candidate event occurring before the anchor can still qualify when it falls within the configured bounds. The emitted result remains the canonical `MeasureMember` row shape described above, so downstream comparison is based on the resolved `measure_date` selected by the window logic rather than on a separately emitted delta column.
+
+**Pick strategy** (`window_pick_strategy`)
+
+Controls which candidate event is retained per resolver after applying the window filter:
+
+| Value | Behaviour |
+|-------|-----------|
+| `any` | All qualifying candidate events are preserved |
+| `earliest` | One row per resolver: earliest qualifying candidate date |
+| `latest` | One row per resolver: latest qualifying candidate date |
+| `closest` | One row per resolver: candidate date closest to anchor date |
+
+Default when `NULL`: `earliest`.
+
+**Result date** (`result_date_source`)
+
+Controls which date is emitted as `measure_date` in the output:
+
+| Value | Emitted date |
+|-------|-------------|
+| `candidate` | Date of the candidate event |
+| `anchor` | Date of the anchor event |
+| `greatest` | Later of anchor or candidate |
+| `least` | Earlier of anchor or candidate |
+
+Default when `NULL`: `candidate`.
+
+**Resolver alignment** (`require_same_resolver`)
+
+When `TRUE` (default), the anchor and candidate are joined on both `person_id` and `measure_resolver`. When `FALSE`, the join is on `person_id` only.
+
+**SQL variants**
+
+`sql_any()` and `sql_first()` are supported. `sql_undated()` raises `NotImplementedError` — this surfaces as `WARN` (not `FAIL`) in `is_executable()` because the measure is still usable in the normal execution path.
+
+**Configuration**
+
+Temporal window measures are loaded via `measure_temporal_window.csv` in the config directory. The CSV is optional — existing deployments without it are unaffected.
+
+Example — GP referral to treatment within 42 days:
+
+```
+Measure:
+  name:        GP referral to first treatment or pall care <= 42d
+  combination: rule_or
+  subquery_id: <GP referral subquery>
+
+MeasureTemporalWindow:
+  candidate_measure_id: <any treatment OR pall care composite>
+  window_min_days:      NULL
+  window_max_days:      42
+  window_pick_strategy: earliest
+  result_date_source:   candidate
+  require_same_resolver: TRUE
+```
+
+### Nested Measures
 
 Measures can be nested arbitrarily:
 

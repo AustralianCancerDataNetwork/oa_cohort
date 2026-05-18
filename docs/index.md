@@ -66,7 +66,9 @@ Measures can be:
 * leaf measures backed by a single subquery
 * composite measures backed by child measures
 
-The current dashboard configuration uses `OR` and `AND` combinations. The `RuleCombination` enum also includes `EXCEPT`, but it is not used by the shipped config and is therefore not the focus of the usage docs here.
+* Leaf: wraps a single subquery
+* Composite: combination of child measures via OR / AND / EXCEPT
+* Temporal window: event B relative to event A, with configurable bounds and pick strategy (see [`MeasureTemporalWindow`](measure_resolution.md#temporal-window-event-to-event-timing))
 
 Measures are compiled by `MeasureSQLCompiler` and executed by `MeasureExecutor`.
 

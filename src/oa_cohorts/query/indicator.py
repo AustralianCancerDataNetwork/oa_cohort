@@ -4,7 +4,6 @@ import sqlalchemy as sa
 import sqlalchemy.orm as so
 from typing import Sequence
 from orm_loader.helpers import Base
-from ..core import RuleTemporality
 from ..core.html_utils import HTMLRenderable, RawHTML, esc
 from .report import Report, report_indicator_map
 from .measure import Measure, MeasureMember, MeasureExecutor
@@ -51,15 +50,6 @@ class Indicator(HTMLRenderable, Base):
     numerator_label: so.Mapped[str] = so.mapped_column(sa.String(100))
     denominator_measure_id: so.Mapped[int] = so.mapped_column(sa.ForeignKey('measure.measure_id'))
     denominator_label: so.Mapped[str] = so.mapped_column(sa.String(100))
-
-    temporal_early: so.Mapped[RuleTemporality | None] = so.mapped_column(sa.Enum(RuleTemporality), nullable=True)
-    temporal_late: so.Mapped[RuleTemporality | None] = so.mapped_column(sa.Enum(RuleTemporality), nullable=True)
-
-    temporal_min: so.Mapped[int | None] = so.mapped_column(sa.Integer(), nullable=True)
-    temporal_min_units: so.Mapped[str | None] = so.mapped_column(sa.String(20), nullable=True)
-
-    temporal_max: so.Mapped[int | None] = so.mapped_column(sa.Integer(), nullable=True)
-    temporal_max_units: so.Mapped[str | None] = so.mapped_column(sa.String(20), nullable=True)
 
     numerator_max_days_prior: so.Mapped[int | None] = so.mapped_column(sa.Integer(), nullable=True)
     numerator_max_days_post: so.Mapped[int | None] = so.mapped_column(sa.Integer(), nullable=True)
@@ -315,19 +305,6 @@ class Indicator(HTMLRenderable, Base):
             unit = self.benchmark_unit or ""
             hdr["Benchmark"] = f"{self.benchmark} {unit}".strip()
 
-        # Temporal constraints summary
-        temporal_bits = []
-        if self.temporal_min is not None:
-            temporal_bits.append(f"≥ {self.temporal_min} {self.temporal_min_units or ''}".strip())
-        if self.temporal_max is not None:
-            temporal_bits.append(f"≤ {self.temporal_max} {self.temporal_max_units or ''}".strip())
-        if self.temporal_early:
-            temporal_bits.append(f"Early: {self.temporal_early.value}")
-        if self.temporal_late:
-            temporal_bits.append(f"Late: {self.temporal_late.value}")
-
-        if temporal_bits:
-            hdr["Temporal"] = " / ".join(temporal_bits)
         if self.has_numerator_window():
             prior, post = self.numerator_window()
             hdr["Numerator window"] = f"-{prior if prior is not None else '∞'} / +{post if post is not None else '∞'} days"
