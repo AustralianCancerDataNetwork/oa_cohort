@@ -29,7 +29,6 @@ class IndicatorSummary:
     denominator_measure_id: int
     denominator_measure_name: str
     denominator_label: str
-    temporal_summary: str
     benchmark_summary: str
 
 
@@ -60,7 +59,6 @@ class IndicatorDetailSummary:
     numerator_measure: MeasureSummary
     denominator_label: str
     denominator_measure: MeasureSummary
-    temporal_summary: str
     benchmark_summary: str
 
 
@@ -159,7 +157,6 @@ def load_indicator_detail_summary(
         numerator_measure=_to_measure_summary(indicator.numerator_measure),
         denominator_label=indicator.denominator_label,
         denominator_measure=_to_measure_summary(indicator.denominator_measure),
-        temporal_summary=_render_temporal_summary(indicator),
         benchmark_summary=_render_benchmark_summary(indicator),
     )
 
@@ -180,26 +177,8 @@ def _to_summary(report: Report, indicator: Indicator) -> IndicatorSummary:
         denominator_measure_id=indicator.denominator_measure_id,
         denominator_measure_name=indicator.denominator_measure.name,
         denominator_label=indicator.denominator_label,
-        temporal_summary=_render_temporal_summary(indicator),
         benchmark_summary=_render_benchmark_summary(indicator),
     )
-
-
-def _render_temporal_summary(indicator: Indicator) -> str:
-    """Render temporal indicator constraints as a compact summary string."""
-
-    parts: list[str] = []
-    if indicator.temporal_early is not None:
-        parts.append(f"early={indicator.temporal_early.value}")
-    if indicator.temporal_late is not None:
-        parts.append(f"late={indicator.temporal_late.value}")
-    if indicator.temporal_min is not None:
-        unit = indicator.temporal_min_units or ""
-        parts.append(f"min={indicator.temporal_min} {unit}".strip())
-    if indicator.temporal_max is not None:
-        unit = indicator.temporal_max_units or ""
-        parts.append(f"max={indicator.temporal_max} {unit}".strip())
-    return ", ".join(parts) or "-"
 
 
 def _render_benchmark_summary(indicator: Indicator) -> str:

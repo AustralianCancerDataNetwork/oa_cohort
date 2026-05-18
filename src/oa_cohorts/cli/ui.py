@@ -276,7 +276,6 @@ def render_indicator_summaries(
             "Denominator",
             f"{summary.denominator_measure_id}: {summary.denominator_measure_name} [{summary.denominator_label}]",
         )
-        grid.add_row("Temporal", summary.temporal_summary)
         grid.add_row("Benchmark", summary.benchmark_summary)
         return Panel.fit(
             grid,
@@ -294,7 +293,6 @@ def render_indicator_summaries(
     table.add_column("Reference")
     table.add_column("Numerator")
     table.add_column("Denominator")
-    table.add_column("Temporal")
     table.add_column("Benchmark")
 
     for summary in summaries:
@@ -304,7 +302,6 @@ def render_indicator_summaries(
             summary.reference or "-",
             f"{summary.numerator_measure_id}: {summary.numerator_measure_name} [{summary.numerator_label}]",
             f"{summary.denominator_measure_id}: {summary.denominator_measure_name} [{summary.denominator_label}]",
-            summary.temporal_summary,
             summary.benchmark_summary,
         )
 
@@ -319,7 +316,6 @@ def render_indicator_detail_summary(summary: IndicatorDetailSummary) -> Panel:
     grid.add_row("Description", summary.description)
     grid.add_row("Reference", summary.reference or "-")
     grid.add_row("Reports", ", ".join(summary.report_memberships) or "-")
-    grid.add_row("Temporal", summary.temporal_summary)
     grid.add_row("Benchmark", summary.benchmark_summary)
     grid.add_row(
         "Numerator",
