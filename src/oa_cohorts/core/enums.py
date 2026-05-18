@@ -99,3 +99,15 @@ class ReportStatus(str, enum.Enum):
     st_current = 'current'
     st_draft = 'draft'
     st_historical = 'historical'
+
+class WindowPickStrategy(str, enum.Enum):
+    any      = "any"
+    earliest = "earliest"
+    latest   = "latest"
+    closest  = "closest"
+
+class ResultDateSource(str, enum.Enum):
+    anchor    = "anchor"
+    candidate = "candidate"
+    greatest  = "greatest"
+    least     = "least"

@@ -122,3 +122,9 @@
 
 ## 0.5.2
 - concurrent treatment measurable
+
+## 0.6.0
+- temporal window measure type: first-class event-to-event timing via `MeasureTemporalWindow`
+- removed dead temporal columns from indicator table (`temporal_early`, `temporal_late`, `temporal_min`, `temporal_min_units`, `temporal_max`, `temporal_max_units`)
+- `config_import` supports optional CSV tables
+- removed notebooks directory until updated examples can be created

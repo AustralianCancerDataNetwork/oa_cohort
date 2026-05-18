@@ -142,6 +142,19 @@ def _build_config_dir(config_dir: Path) -> Path:
         ],
     )
     _write_csv(
+        config_dir / "measure_temporal_window.csv",
+        [
+            "measure_id",
+            "candidate_measure_id",
+            "window_min_days",
+            "window_max_days",
+            "window_pick_strategy",
+            "result_date_source",
+            "require_same_resolver",
+        ],
+        [],
+    )
+    _write_csv(
         config_dir / "dash_cohort_def.csv",
         ["dash_cohort_def_id", "dash_cohort_def_name", "dash_cohort_def_short_name", "measure_id"],
         [

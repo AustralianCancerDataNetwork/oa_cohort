@@ -129,10 +129,15 @@ class FakeMeasure:
     _children: list[object] = field(default_factory=list)
     person_ep_override: bool = False
     _members: list[MeasureMember] | None = None
+    window_config: object = None
 
     @property
     def children(self) -> list[object]:
         return list(self._children)
+
+    @property
+    def is_temporal_window(self) -> bool:
+        return self.window_config is not None
 
     def members(self, executor: MeasureExecutor):
         return executor.members(self)

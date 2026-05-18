@@ -88,8 +88,9 @@ Compiles to arbitrary-depth boolean query logic, which when executed produces a 
 
 A `Measure` can be:
 
-* Leaf: (wraps a single subquery) 
-* Composite (combination of child measures)
+* Leaf: wraps a single subquery
+* Composite: combination of child measures via OR / AND / EXCEPT
+* Temporal window: event B relative to event A, with configurable bounds and pick strategy (see [`MeasureTemporalWindow`](measure_resolution.md#temporal-window-event-to-event-timing))
 
 Measures do not execute SQL directly — they compile into SQL via `MeasureSQLCompiler`, and execution is handled by `MeasureExecutor`.
 

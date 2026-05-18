@@ -20,6 +20,7 @@ from ..query import (
     Indicator,
     Measure,
     MeasureRelationship,
+    MeasureTemporalWindow,
     Phenotype,
     PhenotypeDefinition,
     QueryRule,
@@ -41,6 +42,7 @@ class TableImportSpec:
     table: sa.Table
     filenames: tuple[str, ...]
     value_transforms: dict[str, RowTransform] = field(default_factory=dict)
+    optional: bool = False
 
     @property
     def label(self) -> str:
@@ -368,6 +370,12 @@ CONFIG_IMPORT_SPECS: tuple[TableImportSpec, ...] = (
         filenames=("measure_relationship.csv",),
     ),
     TableImportSpec(
+        table=MeasureTemporalWindow.__table__,
+        filenames=("measure_temporal_window.csv",),
+        value_transforms={"require_same_resolver": parse_bool},
+        optional=True,
+    ),
+    TableImportSpec(
         table=DashCohortDef.__table__,
         filenames=("dash_cohort_def.csv",),
     ),
@@ -432,7 +440,12 @@ def import_config_directory(
         dry_run=dry_run,
     )
     for index, spec in enumerate(CONFIG_IMPORT_SPECS, start=1):
-        path = spec.resolve_path(config_path)
+        try:
+            path = spec.resolve_path(config_path)
+        except FileNotFoundError:
+            if spec.optional:
+                continue
+            raise
         results.append(
             _sync_table(
                 session,

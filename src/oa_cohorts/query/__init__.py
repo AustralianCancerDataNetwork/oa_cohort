@@ -1,5 +1,5 @@
 from .indicator import Indicator, report_indicator_map
-from .measure import Measure, MeasureRelationship
+from .measure import Measure, MeasureRelationship, MeasureTemporalWindow
 from ..output.query_plan import MeasureNode, SubqueryNode, QueryNode, QueryPlan
 from .dash_cohort import DashCohort, DashCohortDef, dash_cohort_def_map
 from .report import Report, ReportCohortMap
@@ -15,6 +15,7 @@ __all__ = [
     "report_indicator_map",
     "Measure",
     "MeasureRelationship",
+    "MeasureTemporalWindow",
     "MeasureNode",
     "SubqueryNode",
     "QueryNode",

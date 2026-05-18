@@ -1,4 +1,4 @@
-from .enums import RuleTemporality, RuleTarget, RuleMatcher, ThresholdDirection, RuleCombination, ReportStatus
+from .enums import RuleTemporality, RuleTarget, RuleMatcher, ThresholdDirection, RuleCombination, ReportStatus, WindowPickStrategy, ResultDateSource
 
 __all__ = [
     "RuleTemporality",
@@ -7,4 +7,6 @@ __all__ = [
     "ThresholdDirection",
     "RuleCombination",
     "ReportStatus",
+    "WindowPickStrategy",
+    "ResultDateSource",
 ]
