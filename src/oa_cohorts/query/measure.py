@@ -403,7 +403,7 @@ class MeasureTemporalWindow(Base):
 
 
 def _days_offset(n: int) -> sa.ColumnElement:
-    """Portable day-interval expression for date arithmetic (PostgreSQL)."""
+    """PostgreSQL INTERVAL expression for date arithmetic. Not cross-dialect portable."""
     return sa.cast(n, sa.Integer) * sa.text("INTERVAL '1 day'")
 
 
@@ -542,6 +542,11 @@ class MeasureSQLCompiler:
     def _sql_temporal_window_any(self, *, ep_override: bool = False) -> SQLQuery:
         cfg = self.measure.window_config
         assert cfg is not None
+        if cfg.candidate_measure is None:
+            raise ValueError(
+                f"Temporal window measure {self.measure.measure_id} references "
+                f"candidate_measure_id={cfg.candidate_measure_id} which could not be loaded."
+            )
         if self.measure.subquery is None:
             raise ValueError(
                 f"Temporal window measure {self.measure.measure_id} has no subquery (anchor)."
@@ -588,63 +593,65 @@ class MeasureSQLCompiler:
         else:
             result_date = candidate_sq.c.measure_date
 
-        base = sa.select(
+        # Build base carrying candidate_date and anchor_date so pick strategy can order
+        # by candidate timing without being affected by the result_date transformation.
+        base_q = sa.select(
             anchor_sq.c.person_id,
             anchor_sq.c.episode_id,
             anchor_sq.c.measure_resolver,
             result_date.label("measure_date"),
+            candidate_sq.c.measure_date.label("_candidate_date"),
+            anchor_sq.c.measure_date.label("_anchor_date"),
         ).join(candidate_sq, sa.and_(*join_conds))
 
         if window_conds:
-            base = base.where(sa.and_(*window_conds))
+            base_q = base_q.where(sa.and_(*window_conds))
 
-        # Step 6: pick strategy
+        base = base_q.subquery()
+
+        def _canonical(sq):
+            return sa.select(
+                sq.c.person_id,
+                sq.c.episode_id,
+                sq.c.measure_resolver,
+                sq.c.measure_date,
+            )
+
+        # Step 6: pick strategy — ordering always on _candidate_date, not result_date
         strategy = cfg.window_pick_strategy or WindowPickStrategy.earliest
         if strategy is WindowPickStrategy.any:
-            return base
+            return _canonical(base)
 
         if strategy in (WindowPickStrategy.earliest, WindowPickStrategy.latest):
-            agg_fn = sa.func.min if strategy is WindowPickStrategy.earliest else sa.func.max
-            inner = base.subquery()
-            return sa.select(
-                inner.c.person_id,
-                inner.c.episode_id,
-                inner.c.measure_resolver,
-                agg_fn(inner.c.measure_date).label("measure_date"),
-            ).group_by(inner.c.person_id, inner.c.episode_id, inner.c.measure_resolver)
+            order_expr = (
+                sa.asc(base.c._candidate_date)
+                if strategy is WindowPickStrategy.earliest
+                else sa.desc(base.c._candidate_date)
+            )
+            rn_sq = sa.select(
+                base,
+                sa.func.row_number().over(
+                    partition_by=[base.c.person_id, base.c.episode_id, base.c.measure_resolver],
+                    order_by=order_expr,
+                ).label("_rn"),
+            ).subquery()
+            return _canonical(rn_sq).where(rn_sq.c._rn == 1)
 
         # closest — one row per resolver, minimising |candidate_date - anchor_date|
-        inner_closest = sa.select(
-            anchor_sq.c.person_id,
-            anchor_sq.c.episode_id,
-            anchor_sq.c.measure_resolver,
-            result_date.label("measure_date"),
+        rn_sq = sa.select(
+            base,
             sa.func.row_number().over(
-                partition_by=[
-                    anchor_sq.c.person_id,
-                    anchor_sq.c.episode_id,
-                    anchor_sq.c.measure_resolver,
-                ],
+                partition_by=[base.c.person_id, base.c.episode_id, base.c.measure_resolver],
                 order_by=[
                     sa.func.abs(
-                        sa.func.extract("epoch", candidate_sq.c.measure_date)
-                        - sa.func.extract("epoch", anchor_sq.c.measure_date)
+                        sa.func.extract("epoch", base.c._candidate_date)
+                        - sa.func.extract("epoch", base.c._anchor_date)
                     ),
-                    candidate_sq.c.measure_date,  # prefer earlier on ties
+                    base.c._candidate_date,  # prefer earlier on ties
                 ],
             ).label("_rn"),
-        ).join(candidate_sq, sa.and_(*join_conds))
-
-        if window_conds:
-            inner_closest = inner_closest.where(sa.and_(*window_conds))
-
-        rn_sq = inner_closest.subquery()
-        return sa.select(
-            rn_sq.c.person_id,
-            rn_sq.c.episode_id,
-            rn_sq.c.measure_resolver,
-            rn_sq.c.measure_date,
-        ).where(rn_sq.c._rn == 1)
+        ).subquery()
+        return _canonical(rn_sq).where(rn_sq.c._rn == 1)
 
     def _sql_temporal_window_first(self, *, ep_override: bool = False) -> SQLQuery:
         inner = self._sql_temporal_window_any(ep_override=ep_override).subquery()

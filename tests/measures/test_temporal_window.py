@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 
 import pytest
 import sqlalchemy as sa
@@ -89,26 +88,28 @@ def test_pick_any_produces_no_group_by():
     assert "GROUP BY" not in sql
 
 
-def test_pick_earliest_wraps_with_min_group_by():
+def test_pick_earliest_uses_row_number():
     m = _make_measure(
         [_row(1, 10, 10, "2024-01-01")],
         [_row(1, 10, 10, "2024-02-01")],
         window_pick_strategy=WindowPickStrategy.earliest,
     )
     sql = str(MeasureSQLCompiler(m).sql_any().compile(compile_kwargs={"literal_binds": True}))
-    assert "GROUP BY" in sql
-    assert "min(" in sql.lower()
+    assert "row_number" in sql.lower()
+    assert "over" in sql.lower()
+    assert "GROUP BY" not in sql
 
 
-def test_pick_latest_wraps_with_max_group_by():
+def test_pick_latest_uses_row_number():
     m = _make_measure(
         [_row(1, 10, 10, "2024-01-01")],
         [_row(1, 10, 10, "2024-02-01")],
         window_pick_strategy=WindowPickStrategy.latest,
     )
     sql = str(MeasureSQLCompiler(m).sql_any().compile(compile_kwargs={"literal_binds": True}))
-    assert "GROUP BY" in sql
-    assert "max(" in sql.lower()
+    assert "row_number" in sql.lower()
+    assert "over" in sql.lower()
+    assert "GROUP BY" not in sql
 
 
 def test_pick_closest_uses_row_number():
