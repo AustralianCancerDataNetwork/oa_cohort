@@ -206,8 +206,8 @@ class Measure(HTMLRenderable, Base):
         if self.is_temporal_window:
             cfg = self.window_config
             assert cfg is not None
-            min_d = f"-{cfg.window_min_days}d" if cfg.window_min_days is not None else "open"
-            max_d = f"+{cfg.window_max_days}d" if cfg.window_max_days is not None else "open"
+            min_d = _fmt_days_offset(cfg.window_min_days) if cfg.window_min_days is not None else "open"
+            max_d = _fmt_days_offset(cfg.window_max_days) if cfg.window_max_days is not None else "open"
             candidate_name = (
                 cfg.candidate_measure.name if cfg.candidate_measure else str(cfg.candidate_measure_id)
             )
@@ -405,6 +405,10 @@ class MeasureTemporalWindow(Base):
 def _days_offset(n: int) -> sa.ColumnElement:
     """Portable day-interval expression for date arithmetic (PostgreSQL)."""
     return sa.cast(n, sa.Integer) * sa.text("INTERVAL '1 day'")
+
+
+def _fmt_days_offset(n: int) -> str:
+    return f"+{n}d" if n >= 0 else f"{n}d"
 
 
 class MeasureSQLCompiler:
@@ -616,11 +620,18 @@ class MeasureSQLCompiler:
             anchor_sq.c.measure_resolver,
             result_date.label("measure_date"),
             sa.func.row_number().over(
-                partition_by=[anchor_sq.c.person_id, anchor_sq.c.measure_resolver],
-                order_by=sa.func.abs(
-                    sa.func.extract("epoch", candidate_sq.c.measure_date)
-                    - sa.func.extract("epoch", anchor_sq.c.measure_date)
-                ),
+                partition_by=[
+                    anchor_sq.c.person_id,
+                    anchor_sq.c.episode_id,
+                    anchor_sq.c.measure_resolver,
+                ],
+                order_by=[
+                    sa.func.abs(
+                        sa.func.extract("epoch", candidate_sq.c.measure_date)
+                        - sa.func.extract("epoch", anchor_sq.c.measure_date)
+                    ),
+                    candidate_sq.c.measure_date,  # prefer earlier on ties
+                ],
             ).label("_rn"),
         ).join(candidate_sq, sa.and_(*join_conds))
 

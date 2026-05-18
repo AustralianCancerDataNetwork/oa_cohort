@@ -37,6 +37,11 @@ RowTransform = Callable[[Any], Any]
 ImportProgressCallback = Callable[["ImportProgressEvent"], None]
 
 
+def _bool_default_true(v: Any) -> bool:
+    result = parse_bool(v)
+    return True if result is None else result
+
+
 @dataclass(frozen=True)
 class TableImportSpec:
     table: sa.Table
@@ -372,7 +377,7 @@ CONFIG_IMPORT_SPECS: tuple[TableImportSpec, ...] = (
     TableImportSpec(
         table=MeasureTemporalWindow.__table__,
         filenames=("measure_temporal_window.csv",),
-        value_transforms={"require_same_resolver": parse_bool},
+        value_transforms={"require_same_resolver": _bool_default_true},
         optional=True,
     ),
     TableImportSpec(

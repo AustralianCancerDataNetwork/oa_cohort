@@ -85,7 +85,7 @@ The measure's own `subquery_id` defines the anchor event. A separate `candidate_
 
 **Window bounds**
 
-`window_min_days` and `window_max_days` are optional. `NULL` means unbounded on that side. Negative values are valid — a candidate event occurring before the anchor still qualifies, and the resulting negative delta is preserved in the output for downstream benchmark comparison.
+`window_min_days` and `window_max_days` are optional. `NULL` means unbounded on that side. Negative values are valid — a candidate event occurring before the anchor can still qualify when it falls within the configured bounds. The emitted result remains the canonical `MeasureMember` row shape described above, so downstream comparison is based on the resolved `measure_date` selected by the window logic rather than on a separately emitted delta column.
 
 **Pick strategy** (`window_pick_strategy`)
 
